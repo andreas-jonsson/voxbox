@@ -116,10 +116,10 @@ func NewRenderer(configs ...Config) (*sdlRenderer, error) {
 	sdl.GL_SetAttribute(sdl.GL_GREEN_SIZE, 8)
 	sdl.GL_SetAttribute(sdl.GL_BLUE_SIZE, 8)
 	//sdl.GL_SetAttribute(sdl.GL_ALPHA_SIZE, 8)
-	//sdl.GL_SetAttribute(sdl.GL_DEPTH_SIZE, 24)
-	sdl.GL_SetAttribute(sdl.GL_STENCIL_SIZE, 8)
+	sdl.GL_SetAttribute(sdl.GL_DEPTH_SIZE, 24)
+	//sdl.GL_SetAttribute(sdl.GL_STENCIL_SIZE, 8)
 
-	sdl.GL_SetAttribute(sdl.GL_MULTISAMPLESAMPLES, 4)
+	//sdl.GL_SetAttribute(sdl.GL_MULTISAMPLESAMPLES, 4)
 
 	sdl.GL_SetAttribute(sdl.GL_CONTEXT_PROFILE_MASK, sdl.GL_CONTEXT_PROFILE_CORE)
 	sdl.GL_SetAttribute(sdl.GL_CONTEXT_MAJOR_VERSION, 2)
@@ -156,7 +156,7 @@ func (rnd *sdlRenderer) ToggleFullscreen() {
 }
 
 func (rnd *sdlRenderer) Clear() {
-	gl.Clear(gl.COLOR_BUFFER_BIT | gl.STENCIL_BUFFER_BIT)
+	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 }
 
 func (rnd *sdlRenderer) Present() {

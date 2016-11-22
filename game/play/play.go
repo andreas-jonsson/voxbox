@@ -19,33 +19,52 @@ package play
 
 import (
 	"image/color"
-	"image/color/palette"
-	"os"
+	"log"
+	"math"
+	"time"
 
 	"github.com/andreas-jonsson/voxbox/game"
 	"github.com/andreas-jonsson/voxbox/voxel"
 	"github.com/andreas-jonsson/voxbox/voxel/vox"
+	"github.com/andreas-jonsson/warp/data"
+	"github.com/goxjs/gl"
+	"github.com/goxjs/gl/glutil"
+	"github.com/ungerik/go3d/mat4"
+)
+
+var (
+	paletteData      []byte
+	paletteTextureID gl.Texture
+
+	vertexBuffer   []byte
+	vertexBufferID gl.Buffer
+	voxelProgramID gl.Program
 )
 
 type voxelImage struct {
 	size voxel.Point
 	data []uint8
-	pal  color.Palette
 }
 
 func (img *voxelImage) SetBounds(b voxel.Box) {
 	img.size = b.Max
 	sz := b.Max.X * b.Max.Y * b.Max.Z
 	img.data = make([]uint8, sz)
-	img.pal = palette.Plan9
+
+	vertexBuffer = make([]byte, 0, sz*12+sz*6)
 }
 
 func (img *voxelImage) SetPalette(pal color.Palette) {
-	img.pal = pal
+	for _, c := range pal {
+		r, g, b, _ := c.RGBA()
+		paletteData = append(paletteData, byte(r))
+		paletteData = append(paletteData, byte(g))
+		paletteData = append(paletteData, byte(b))
+	}
 }
 
 func (img *voxelImage) Set(x, y, z int, index uint8) {
-	img.data[img.offset(x, y, z)] = index
+	img.data[img.offset(x, z, y)] = index
 }
 
 func (img *voxelImage) Get(x, y, z int) uint8 {
@@ -69,7 +88,7 @@ func (s *playState) Name() string {
 }
 
 func (s *playState) Enter(from game.GameState, args ...interface{}) error {
-	fp, err := os.Open("test.vox")
+	fp, err := data.FS.Open("test.vox")
 	if err != nil {
 		return err
 	}
@@ -78,37 +97,201 @@ func (s *playState) Enter(from game.GameState, args ...interface{}) error {
 	if err := vox.Decode(fp, &s.img); err != nil {
 		return err
 	}
-	return nil
+
+	vertexBufferID = gl.CreateBuffer()
+	voxelProgramID, err = glutil.CreateProgram(vertexShaderSrc, pixelShaderSrc)
+
+	if len(paletteData) != 256*3 {
+		log.Panicln("invalid palette")
+	}
+
+	paletteTextureID = gl.CreateTexture()
+	gl.ActiveTexture(gl.TEXTURE0)
+	gl.BindTexture(gl.TEXTURE_2D, paletteTextureID)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+	gl.TexImage2D(gl.TEXTURE_2D, 0, 16, 16, gl.RGB, gl.UNSIGNED_BYTE, paletteData)
+
+	return err
 }
 
 func (s *playState) Exit(to game.GameState) error {
 	return nil
 }
 
-func (s *playState) generateVoxel(c color.Color, x, y, z int) {
+func (s *playState) generateVoxel(c uint8, x, y, z int) {
+	cubeVertices := []byte{
+		// front
+		0, 0, 1,
+		1, 0, 1,
+		1, 1, 1,
+		0, 1, 1,
+		// back
+		0, 0, 0,
+		1, 0, 0,
+		1, 1, 0,
+		0, 1, 0,
+	}
 
+	top := [...]int{
+		1, 5, 6,
+		6, 2, 1,
+	}
+
+	bottom := [...]int{
+		4, 0, 3,
+		3, 7, 4,
+	}
+
+	left := [...]int{
+		4, 5, 1,
+		1, 0, 4,
+	}
+
+	right := [...]int{
+		3, 2, 6,
+		6, 7, 3,
+	}
+
+	front := [...]int{
+		0, 1, 2,
+		2, 3, 0,
+	}
+
+	back := [...]int{
+		7, 6, 5,
+		5, 4, 7,
+	}
+
+	write := func(elements [6]int) {
+		for i := 0; i < 6; i++ {
+			offset := elements[i] * 3
+			vertexBuffer = append(vertexBuffer, cubeVertices[offset]+byte(x))
+			vertexBuffer = append(vertexBuffer, cubeVertices[offset+1]+byte(y))
+			vertexBuffer = append(vertexBuffer, cubeVertices[offset+2]+byte(z))
+
+			// Append color
+			vertexBuffer = append(vertexBuffer, c)
+		}
+	}
+
+	write(top)
+	write(bottom)
+	write(left)
+	write(right)
+	write(front)
+	write(back)
+}
+
+func checkGLError() {
+	if err := gl.GetError(); err != gl.NO_ERROR {
+		log.Panicf("GL error: 0x%x\n", err)
+	}
 }
 
 func (s *playState) Update(gctl game.GameControl) error {
 	gctl.PollAll()
 
 	img := &s.img
-	pal := img.pal
+	vertexBuffer = vertexBuffer[:0]
 
 	for z := 0; z < img.size.Z; z++ {
 		for y := 0; y < img.size.Y; y++ {
 			for x := 0; x < img.size.X; x++ {
-				idx := img.Get(x, y, z)
-				if idx > 0 {
-					s.generateVoxel(pal[idx], x, y, z)
+				c := img.Get(x, y, z)
+				if c > 0 {
+					s.generateVoxel(c, x, y, z)
 				}
 			}
 		}
 	}
 
+	gl.UseProgram(voxelProgramID)
+
+	pal := gl.GetUniformLocation(voxelProgramID, "u_palette")
+	gl.Uniform1i(pal, 0)
+
+	pos := gl.GetAttribLocation(voxelProgramID, "a_position")
+
+	gl.BindBuffer(gl.ARRAY_BUFFER, vertexBufferID)
+	gl.BufferData(gl.ARRAY_BUFFER, vertexBuffer, gl.STREAM_DRAW)
+
+	gl.VertexAttribPointer(pos, 4, gl.UNSIGNED_BYTE, false, 0, 0)
+	gl.EnableVertexAttribArray(pos)
+
+	const (
+		near        = 0.01
+		far         = 1000
+		angleOfView = 90
+		aspectRatio = 16 / 9
+	)
+
+	scale := float32(math.Tan(angleOfView*0.5*math.Pi/180) * near)
+	r := aspectRatio * scale
+	l := -r
+	t := scale
+	b := -t
+
+	var (
+		m = mat4.Ident
+		p mat4.T
+	)
+
+	_, tick, _ := gctl.Timing()
+	rot := float32(tick/time.Millisecond) * 0.001
+
+	m.AssignEulerRotation(rot, 0, 0)
+	m.TranslateZ(-40)
+
+	p.AssignPerspectiveProjection(l, r, b, t, 0.01, 100)
+
+	p.MultMatrix(&m)
+
+	mvp := gl.GetUniformLocation(voxelProgramID, "u_mvp")
+	gl.UniformMatrix4fv(mvp, p.Slice())
+
 	return nil
 }
 
 func (s *playState) Render() error {
+	checkGLError()
+	gl.Disable(gl.CULL_FACE)
+	//gl.Disable(gl.DEPTH_TEST)
+
+	//gl.Enable(gl.CULL_FACE)
+	gl.Enable(gl.DEPTH_TEST)
+
+	checkGLError()
+	gl.DrawArrays(gl.TRIANGLES, 0, len(vertexBuffer)/4)
+
+	checkGLError()
 	return nil
 }
+
+var vertexShaderSrc = `
+	#version 120
+
+	uniform mat4 u_mvp;
+	attribute vec4 a_position;
+	varying vec2 v_uv;
+
+	void main()
+	{
+		v_uv = vec2(mod(a_position.w, 16) / 16, 1 - (a_position.w / 16) / 16);
+	    gl_Position = u_mvp * vec4(a_position.xyz, 1);
+	}
+`
+
+var pixelShaderSrc = `
+	#version 120
+
+	uniform sampler2D u_palette;
+	varying vec2 v_uv;
+
+	void main()
+	{
+		//gl_FragColor = vec4(1,0,0,1);
+
+		gl_FragColor = texture2D(u_palette, v_uv);
+	}
+`

@@ -35,7 +35,7 @@ func main() {
 	}
 	defer platform.Shutdown()
 
-	rnd, err := platform.NewRenderer(platform.ConfigWithDiv(2), platform.ConfigWithNoVSync)
+	rnd, err := platform.NewRenderer(platform.ConfigWithDiv(2), platform.ConfigWithNoVSync, platform.ConfigWithDebug)
 	if err != nil {
 		log.Panicln(err)
 	}
@@ -64,7 +64,7 @@ func main() {
 			log.Panicln(err)
 		}
 
-		_, fps := g.Timing()
+		_, _, fps := g.Timing()
 		rnd.SetWindowTitle(fmt.Sprintf("Voxbox - %d fps", fps))
 
 		if err := g.Render(); err != nil {

@@ -37,12 +37,14 @@ type (
 	GameControl interface {
 		SwitchState(to string, args ...interface{}) error
 		CurrentStateName() string
-		Timing() (float64, int)
+		Timing() (time.Duration, time.Duration, int)
 		PollAll()
 		PollEvent() platform.Event
 		Terminate()
 	}
 )
+
+var startupTime = time.Now()
 
 type Game struct {
 	currentState GameState
@@ -50,7 +52,7 @@ type Game struct {
 
 	t, ft     time.Time
 	fps       int
-	dt        float64
+	dt, tick  time.Duration
 	numFrames int
 	running   bool
 }
@@ -120,8 +122,8 @@ func (g *Game) Running() bool {
 	return g.running
 }
 
-func (g *Game) Timing() (float64, int) {
-	return g.dt, g.fps
+func (g *Game) Timing() (time.Duration, time.Duration, int) {
+	return g.dt, g.tick, g.fps
 }
 
 func (g *Game) Terminate() {
@@ -129,18 +131,18 @@ func (g *Game) Terminate() {
 }
 
 func (g *Game) Update() error {
-	now := time.Now()
-	g.dt = float64(now.Sub(g.t).Nanoseconds() / int64(time.Millisecond))
-	g.t = now
+	g.dt = time.Since(g.t)
+	g.tick = time.Since(startupTime)
+	g.t = time.Now()
 
 	if err := g.currentState.Update(g); err != nil {
 		return err
 	}
 
 	g.numFrames++
-	if time.Since(g.ft).Nanoseconds()/int64(time.Millisecond) >= 1000 {
+	if time.Since(g.ft) >= time.Second {
 		g.fps = g.numFrames
-		g.ft = now
+		g.ft = time.Now()
 		g.numFrames = 0
 	}
 

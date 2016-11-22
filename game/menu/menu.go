@@ -33,8 +33,7 @@ func (s *menuState) Name() string {
 }
 
 func (s *menuState) Enter(from game.GameState, args ...interface{}) error {
-	args[0].(game.GameControl).SwitchState("play", args[0])
-	return nil
+	return args[0].(game.GameControl).SwitchState("play", args[0])
 }
 
 func (s *menuState) Exit(to game.GameState) error {
