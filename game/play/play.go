@@ -22,20 +22,21 @@ import (
 	"image/color/palette"
 	"os"
 
-	"github.com/andreas-jonsson/vox"
 	"github.com/andreas-jonsson/voxbox/game"
+	"github.com/andreas-jonsson/voxbox/voxel"
+	"github.com/andreas-jonsson/voxbox/voxel/vox"
 )
 
 type voxelImage struct {
-	x, y, z int
-	data    []uint8
-	pal     color.Palette
+	size voxel.Point
+	data []uint8
+	pal  color.Palette
 }
 
-func (img *voxelImage) SetSize(x, y, z int) {
-	img.x, img.y, img.z = x, y, z
-
-	img.data = make([]uint8, x*y*z)
+func (img *voxelImage) SetBounds(b voxel.Box) {
+	img.size = b.Max
+	sz := b.Max.X * b.Max.Y * b.Max.Z
+	img.data = make([]uint8, sz)
 	img.pal = palette.Plan9
 }
 
@@ -43,16 +44,16 @@ func (img *voxelImage) SetPalette(pal color.Palette) {
 	img.pal = pal
 }
 
-func (img *voxelImage) SetColorIndex(x, y, z int, index uint8) {
+func (img *voxelImage) Set(x, y, z int, index uint8) {
 	img.data[img.offset(x, y, z)] = index
 }
 
-func (img *voxelImage) GetColorIndex(x, y, z int) uint8 {
+func (img *voxelImage) Get(x, y, z int) uint8 {
 	return img.data[img.offset(x, y, z)]
 }
 
 func (img *voxelImage) offset(x, y, z int) int {
-	return z*img.x*img.y + y*img.x + x
+	return z*img.size.X*img.size.Y + y*img.size.X + x
 }
 
 type playState struct {
@@ -74,7 +75,7 @@ func (s *playState) Enter(from game.GameState, args ...interface{}) error {
 	}
 	defer fp.Close()
 
-	if err := vox.Read(fp, &s.img); err != nil {
+	if err := vox.Decode(fp, &s.img); err != nil {
 		return err
 	}
 	return nil
@@ -94,10 +95,10 @@ func (s *playState) Update(gctl game.GameControl) error {
 	img := &s.img
 	pal := img.pal
 
-	for z := 0; z < img.z; z++ {
-		for y := 0; y < img.y; y++ {
-			for x := 0; x < img.x; x++ {
-				idx := img.GetColorIndex(x, y, z)
+	for z := 0; z < img.size.Z; z++ {
+		for y := 0; y < img.size.Y; y++ {
+			for x := 0; x < img.size.X; x++ {
+				idx := img.Get(x, y, z)
 				if idx > 0 {
 					s.generateVoxel(pal[idx], x, y, z)
 				}
