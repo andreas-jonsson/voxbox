@@ -1,4 +1,4 @@
-// +build !js,!mobile
+// +build !mobile
 
 /*
 Copyright (C) 2016 Andreas T Jonsson
@@ -60,7 +60,7 @@ func init() {
 
 func Init() error {
 	idCounter = 0
-	if err := sdl.Init(sdl.INIT_EVERYTHING); err != nil {
+	if err := sdl.Init(sdl.INIT_VIDEO | sdl.INIT_AUDIO | sdl.INIT_GAMECONTROLLER); err != nil {
 		return err
 	}
 	return nil
