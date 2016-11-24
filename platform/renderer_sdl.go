@@ -119,10 +119,11 @@ func NewRenderer(configs ...Config) (*sdlRenderer, error) {
 	sdl.GL_SetAttribute(sdl.GL_DEPTH_SIZE, 24)
 	//sdl.GL_SetAttribute(sdl.GL_STENCIL_SIZE, 8)
 
-	//sdl.GL_SetAttribute(sdl.GL_MULTISAMPLESAMPLES, 4)
+	sdl.GL_SetAttribute(sdl.GL_MULTISAMPLESAMPLES, 4)
 
-	sdl.GL_SetAttribute(sdl.GL_CONTEXT_PROFILE_MASK, sdl.GL_CONTEXT_PROFILE_CORE)
+	//sdl.GL_SetAttribute(sdl.GL_CONTEXT_PROFILE_MASK, sdl.GL_CONTEXT_PROFILE_CORE)
 	sdl.GL_SetAttribute(sdl.GL_CONTEXT_MAJOR_VERSION, 2)
+	sdl.GL_SetAttribute(sdl.GL_CONTEXT_MINOR_VERSION, 1)
 
 	rnd.window, err = sdl.CreateWindow(cfg.windowTitle, sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED, cfg.windowSize.X, cfg.windowSize.Y, sdlFlags)
 	if err != nil {

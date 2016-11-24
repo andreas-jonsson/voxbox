@@ -19,7 +19,6 @@ package play
 
 import (
 	"image/color"
-	"log"
 	"math"
 	"time"
 
@@ -108,7 +107,7 @@ const (
 )
 
 var (
-	paletteData      []byte
+	paletteData      = make([]byte, 256*256*3)
 	paletteTextureID gl.Texture
 	voxelProgramID   gl.Program
 
@@ -170,11 +169,12 @@ func (img *voxelImage) SetBounds(b voxel.Box) {
 }
 
 func (img *voxelImage) SetPalette(pal color.Palette) {
-	for _, c := range pal {
+	for i, c := range pal {
 		r, g, b, _ := c.RGBA()
-		paletteData = append(paletteData, byte(r))
-		paletteData = append(paletteData, byte(g))
-		paletteData = append(paletteData, byte(b))
+		idx := i * 3
+		paletteData[idx] = byte(r)
+		paletteData[idx+1] = byte(g)
+		paletteData[idx+2] = byte(b)
 	}
 }
 
@@ -219,26 +219,11 @@ func (s *playState) Enter(from game.GameState, args ...interface{}) error {
 
 	voxelProgramID, err = glutil.CreateProgram(vertexShaderSrc, pixelShaderSrc)
 
-	if len(paletteData) != 256*3 {
-		log.Panicln("invalid palette")
-	}
-
 	paletteTextureID = gl.CreateTexture()
 	gl.ActiveTexture(gl.TEXTURE0)
 	gl.BindTexture(gl.TEXTURE_2D, paletteTextureID)
 	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, 16, 16, gl.RGB, gl.UNSIGNED_BYTE, paletteData)
-
-	/*
-		for z := 0; z < s.img.size.Z; z++ {
-			for y := 0; y < s.img.size.Y; y++ {
-				for x := 0; x < s.img.size.X; x++ {
-					s.img.Set(x, y, z, byte(rand.Intn(15)+1))
-				}
-			}
-		}
-	*/
+	gl.TexImage2D(gl.TEXTURE_2D, 0, 256, 256, gl.RGB, gl.UNSIGNED_BYTE, paletteData)
 
 	return err
 }
@@ -259,11 +244,14 @@ func isFaceExposed(img *voxelImage, x, y, z int, n vec3.T) bool {
 	return img.Get(x, y, z) == 0
 }
 
-func (s *playState) Update(gctl game.GameControl) error {
-	gctl.PollAll()
+func (s *playState) buildBuffers(forward vec3.T) {
+	var visibleBuffers []*faceBuffer
 
 	for _, b := range buffers {
 		b.reset()
+		//if vec3.Dot(&b.normal, &forward) < 0 {
+		visibleBuffers = append(visibleBuffers, b)
+		//}
 	}
 
 	img := &s.img
@@ -275,7 +263,7 @@ func (s *playState) Update(gctl game.GameControl) error {
 					continue
 				}
 
-				for _, b := range buffers {
+				for _, b := range visibleBuffers {
 					if isFaceExposed(img, x, y, z, b.normal) {
 						b.append(byte(x), byte(y), byte(z), c)
 					}
@@ -283,16 +271,20 @@ func (s *playState) Update(gctl game.GameControl) error {
 			}
 		}
 	}
+}
+
+func (s *playState) Update(gctl game.GameControl) error {
+	gctl.PollAll()
 
 	gl.UseProgram(voxelProgramID)
 
-	pal := gl.GetUniformLocation(voxelProgramID, "u_palette")
+	pal := gl.GetUniformLocation(voxelProgramID, "u_palettes")
 	gl.Uniform1i(pal, 0)
 
 	const (
 		near        = 0.01
 		far         = 1000.0
-		angleOfView = 90
+		angleOfView = 75
 		aspectRatio = 16 / 9
 	)
 
@@ -312,9 +304,16 @@ func (s *playState) Update(gctl game.GameControl) error {
 
 	m.AssignEulerRotation(rot, 0, 0)
 	m.TranslateY(-50)
+	//m.TranslateX(10)
 
 	p.AssignPerspectiveProjection(l, r, b, t, near, far)
 	p.MultMatrix(&m)
+
+	// Build buffers
+	forward := vec3.T{0, 0, 1}
+	q := m.Quaternion()
+	q.Invert().RotateVec3(&forward)
+	s.buildBuffers(forward)
 
 	mvp := gl.GetUniformLocation(voxelProgramID, "u_mvp")
 	gl.UniformMatrix4fv(mvp, p.Slice())
@@ -332,8 +331,7 @@ func (s *playState) Update(gctl game.GameControl) error {
 
 func (s *playState) Render() error {
 	gl.Disable(gl.CULL_FACE)
-	//gl.Disable(gl.DEPTH_TEST)
-	//gl.Enable(gl.CULL_FACE)
+	gl.Disable(gl.BLEND)
 	gl.Enable(gl.DEPTH_TEST)
 
 	pos := gl.GetAttribLocation(voxelProgramID, "a_position")
@@ -356,26 +354,23 @@ var vertexShaderSrc = `
 
 	attribute vec4 a_position;
 
-	varying vec2 v_uv;
+	varying float v_color_index;
 	varying vec3 v_light;
 
 	void main()
 	{
-		int index = int(a_position.w);
-		float x = mod(index, 16);
-		float y = index / 16;
-
-		v_uv = vec2(x / 16, 1 - y/16);
+		v_color_index = a_position.w / 255;
 
 		// Lighting
 
 		const vec3 lightColor = vec3(1,1,1);
 		vec3 lightDir = normalize(vec3(1,1,1));
 
-		const float ambientStrength = 0.5;
+		const float ambientStrength = 0.8;
 		vec3 ambient = ambientStrength * lightColor;
 
-		vec3 normal = normalize(mat3(u_model_inv) * u_normal);
+		//vec3 normal = normalize(mat3(u_model_inv) * u_normal);
+		vec3 normal = u_normal;
 
 		float diff = max(dot(normal, lightDir), 0);
 		vec3 diffuse = diff * lightColor;
@@ -388,16 +383,14 @@ var vertexShaderSrc = `
 var pixelShaderSrc = `
 	#version 120
 
-	uniform sampler2D u_palette;
+	uniform sampler2D u_palettes;
 
-	varying vec2 v_uv;
+	varying float v_color_index;
 	varying vec3 v_light;
 
 	void main()
 	{
-		vec3 voxel_color = texture2D(u_palette, v_uv).xyz;
-		voxel_color = vec3(1,0,0);
-
+		vec3 voxel_color = texture2D(u_palettes, vec2(v_color_index, 0)).xyz;
 		gl_FragColor = vec4(voxel_color * v_light, 1);
 	}
 `
