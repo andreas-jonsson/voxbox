@@ -23,143 +23,23 @@ import (
 	"time"
 
 	"github.com/andreas-jonsson/voxbox/game"
+	"github.com/andreas-jonsson/voxbox/view"
 	"github.com/andreas-jonsson/voxbox/voxel"
 	"github.com/andreas-jonsson/voxbox/voxel/vox"
 	"github.com/andreas-jonsson/warp/data"
 	"github.com/goxjs/gl"
-	"github.com/goxjs/gl/glutil"
 	"github.com/ungerik/go3d/mat4"
 	"github.com/ungerik/go3d/vec3"
 )
 
-var (
-	cubeVertices = [24]byte{
-		// front
-		0, 0, 1,
-		1, 0, 1,
-		1, 1, 1,
-		0, 1, 1,
-		// back
-		0, 0, 0,
-		1, 0, 0,
-		1, 1, 0,
-		0, 1, 0,
-	}
-
-	leftIndices = [6]int{
-		1, 5, 6,
-		6, 2, 1,
-	}
-
-	rightIndices = [6]int{
-		4, 0, 3,
-		3, 7, 4,
-	}
-
-	topIndices = [6]int{
-		4, 5, 1,
-		1, 0, 4,
-	}
-
-	bottomIndices = [6]int{
-		3, 2, 6,
-		6, 7, 3,
-	}
-
-	frontIndices = [6]int{
-		0, 1, 2,
-		2, 3, 0,
-	}
-
-	backIndices = [6]int{
-		7, 6, 5,
-		5, 4, 7,
-	}
-)
-
-var facesIndices = [][6]int{
-	leftIndices,
-	rightIndices,
-	topIndices,
-	bottomIndices,
-	frontIndices,
-	backIndices,
-}
-
-var facesNormals = []vec3.T{
-	{1, 0, 0},
-	{-1, 0, 0},
-	{0, -1, 0},
-	{0, 1, 0},
-	{0, 0, 1},
-	{0, 0, -1},
-}
-
-type faceName int
-
-const (
-	topFace faceName = iota
-	bottomFace
-	leftFace
-	rightFace
-	frontFace
-	backFace
-)
-
-var (
-	paletteData      = make([]byte, 256*256*3)
-	paletteTextureID gl.Texture
-	voxelProgramID   gl.Program
-
-	buffers [6]*faceBuffer
-)
-
-type faceBuffer struct {
-	vertexBuffer   []byte
-	vertexBufferID gl.Buffer
-	indices        [6]int
-	normal         vec3.T
-	face           faceName
-}
-
-func newFaceBuffer(face faceName) *faceBuffer {
-	return &faceBuffer{
-		vertexBufferID: gl.CreateBuffer(),
-		indices:        facesIndices[face],
-		normal:         facesNormals[face],
-		face:           face,
-	}
-}
-
-func (b *faceBuffer) reset() {
-	b.vertexBuffer = b.vertexBuffer[:0]
-}
-
-func (b *faceBuffer) append(x, y, z, color byte) {
-	for i := 0; i < 6; i++ {
-		index := b.indices[i] * 3
-		b.vertexBuffer = append(b.vertexBuffer, cubeVertices[index]+x)
-		b.vertexBuffer = append(b.vertexBuffer, cubeVertices[index+1]+y)
-		b.vertexBuffer = append(b.vertexBuffer, cubeVertices[index+2]+z)
-		b.vertexBuffer = append(b.vertexBuffer, color)
-	}
-}
-
-func (b *faceBuffer) draw(location gl.Attrib) {
-	if len(b.vertexBuffer) > 0 {
-		gl.BindBuffer(gl.ARRAY_BUFFER, b.vertexBufferID)
-		gl.BufferData(gl.ARRAY_BUFFER, b.vertexBuffer, gl.STREAM_DRAW)
-
-		gl.VertexAttribPointer(location, 4, gl.UNSIGNED_BYTE, false, 0, 0)
-		gl.EnableVertexAttribArray(location)
-
-		gl.DrawArrays(gl.TRIANGLES, 0, len(b.vertexBuffer)/4)
-	}
-}
-
 type voxelImage struct {
+	pal  color.Palette
 	size voxel.Point
 	data []uint8
+}
+
+func (img *voxelImage) Bounds() voxel.Box {
+	return voxel.Box{Min: voxel.ZP, Max: img.size}
 }
 
 func (img *voxelImage) SetBounds(b voxel.Box) {
@@ -169,13 +49,7 @@ func (img *voxelImage) SetBounds(b voxel.Box) {
 }
 
 func (img *voxelImage) SetPalette(pal color.Palette) {
-	for i, c := range pal {
-		r, g, b, _ := c.RGBA()
-		idx := i * 3
-		paletteData[idx] = byte(r)
-		paletteData[idx+1] = byte(g)
-		paletteData[idx+2] = byte(b)
-	}
+	img.pal = pal
 }
 
 func (img *voxelImage) Set(x, y, z int, index uint8) {
@@ -191,7 +65,8 @@ func (img *voxelImage) offset(x, y, z int) int {
 }
 
 type playState struct {
-	img voxelImage
+	img  voxelImage
+	view *view.View
 }
 
 func NewPlayState() *playState {
@@ -213,73 +88,33 @@ func (s *playState) Enter(from game.GameState, args ...interface{}) error {
 		return err
 	}
 
-	for i := range buffers {
-		buffers[i] = newFaceBuffer(faceName(i))
+	v, err := view.NewView()
+	if err != nil {
+		return err
 	}
 
-	voxelProgramID, err = glutil.CreateProgram(vertexShaderSrc, pixelShaderSrc)
+	v.SetPalettes(s.img.pal)
+	s.view = v
 
-	paletteTextureID = gl.CreateTexture()
-	gl.ActiveTexture(gl.TEXTURE0)
-	gl.BindTexture(gl.TEXTURE_2D, paletteTextureID)
-	gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-	gl.TexImage2D(gl.TEXTURE_2D, 0, 256, 256, gl.RGB, gl.UNSIGNED_BYTE, paletteData)
-
-	return err
+	return nil
 }
 
 func (s *playState) Exit(to game.GameState) error {
 	return nil
 }
 
-func isFaceExposed(img *voxelImage, x, y, z int, n vec3.T) bool {
-	size := img.size
-	x += int(n[0])
-	y += int(n[1])
-	z += int(n[2])
-
-	if x < 0 || y < 0 || z < 0 || x >= size.X || y >= size.Y || z >= size.Z {
-		return true
-	}
-	return img.Get(x, y, z) == 0
-}
-
-func (s *playState) buildBuffers(forward vec3.T) {
-	var visibleBuffers []*faceBuffer
-
-	for _, b := range buffers {
-		b.reset()
-		//if vec3.Dot(&b.normal, &forward) < 0 {
-		visibleBuffers = append(visibleBuffers, b)
-		//}
-	}
-
-	img := &s.img
-	for z := 0; z < img.size.Z; z++ {
-		for y := 0; y < img.size.Y; y++ {
-			for x := 0; x < img.size.X; x++ {
-				c := img.Get(x, y, z)
-				if c == 0 {
-					continue
-				}
-
-				for _, b := range visibleBuffers {
-					if isFaceExposed(img, x, y, z, b.normal) {
-						b.append(byte(x), byte(y), byte(z), c)
-					}
-				}
-			}
-		}
-	}
-}
-
 func (s *playState) Update(gctl game.GameControl) error {
+	_, tick, _ := gctl.Timing()
 	gctl.PollAll()
 
-	gl.UseProgram(voxelProgramID)
+	// ------------- update view ----------------
 
-	pal := gl.GetUniformLocation(voxelProgramID, "u_palettes")
-	gl.Uniform1i(pal, 0)
+	//voxel.Blit(s.view, &s.img, voxel.Pt(0, 0, int(tick/time.Second)), s.img.Bounds())
+	voxel.Blit(s.view, &s.img, voxel.ZP, s.img.Bounds())
+
+	// ------------------------------------------
+
+	s.view.SetGLState()
 
 	const (
 		near        = 0.01
@@ -299,7 +134,6 @@ func (s *playState) Update(gctl game.GameControl) error {
 		p mat4.T
 	)
 
-	_, tick, _ := gctl.Timing()
 	rot := float32(tick/time.Millisecond) * 0.0005
 
 	m.AssignEulerRotation(rot, 0, 0)
@@ -313,8 +147,9 @@ func (s *playState) Update(gctl game.GameControl) error {
 	forward := vec3.T{0, 0, 1}
 	q := m.Quaternion()
 	q.Invert().RotateVec3(&forward)
-	s.buildBuffers(forward)
+	s.view.BuildBuffers(forward)
 
+	voxelProgramID := s.view.ProgramID()
 	mvp := gl.GetUniformLocation(voxelProgramID, "u_mvp")
 	gl.UniformMatrix4fv(mvp, p.Slice())
 
@@ -330,67 +165,5 @@ func (s *playState) Update(gctl game.GameControl) error {
 }
 
 func (s *playState) Render() error {
-	gl.Disable(gl.CULL_FACE)
-	gl.Disable(gl.BLEND)
-	gl.Enable(gl.DEPTH_TEST)
-
-	pos := gl.GetAttribLocation(voxelProgramID, "a_position")
-	normal := gl.GetUniformLocation(voxelProgramID, "u_normal")
-
-	for _, b := range buffers {
-		gl.Uniform3fv(normal, b.normal.Slice())
-		b.draw(pos)
-	}
-
-	return nil
+	return s.view.Render()
 }
-
-var vertexShaderSrc = `
-	#version 120
-
-	uniform mat4 u_mvp;
-	uniform mat4 u_model_inv;
-	uniform vec3 u_normal;
-
-	attribute vec4 a_position;
-
-	varying float v_color_index;
-	varying vec3 v_light;
-
-	void main()
-	{
-		v_color_index = a_position.w / 255;
-
-		// Lighting
-
-		const vec3 lightColor = vec3(1,1,1);
-		vec3 lightDir = normalize(vec3(1,1,1));
-
-		const float ambientStrength = 0.8;
-		vec3 ambient = ambientStrength * lightColor;
-
-		//vec3 normal = normalize(mat3(u_model_inv) * u_normal);
-		vec3 normal = u_normal;
-
-		float diff = max(dot(normal, lightDir), 0);
-		vec3 diffuse = diff * lightColor;
-
-		v_light = ambient + diffuse;
-		gl_Position = u_mvp * vec4(a_position.xyz, 1);
-	}
-`
-
-var pixelShaderSrc = `
-	#version 120
-
-	uniform sampler2D u_palettes;
-
-	varying float v_color_index;
-	varying vec3 v_light;
-
-	void main()
-	{
-		vec3 voxel_color = texture2D(u_palettes, vec2(v_color_index, 0)).xyz;
-		gl_FragColor = vec4(voxel_color * v_light, 1);
-	}
-`
