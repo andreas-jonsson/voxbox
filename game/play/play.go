@@ -103,14 +103,19 @@ func (s *playState) Exit(to game.GameState) error {
 	return nil
 }
 
+var anim = 0.0
+
 func (s *playState) Update(gctl game.GameControl) error {
-	_, tick, _ := gctl.Timing()
+	dt, tick, _ := gctl.Timing()
 	gctl.PollAll()
+
+	s.view.Clear(0)
 
 	// ------------- update view ----------------
 
-	//voxel.Blit(s.view, &s.img, voxel.Pt(0, 0, int(tick/time.Second)), s.img.Bounds())
-	voxel.Blit(s.view, &s.img, voxel.ZP, s.img.Bounds())
+	anim += dt.Seconds() * 10
+	voxel.Blit(s.view, &s.img, voxel.Pt(0, 0, int(anim)), s.img.Bounds())
+	//voxel.Blit(s.view, &s.img, voxel.ZP, s.img.Bounds())
 
 	// ------------------------------------------
 

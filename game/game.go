@@ -58,7 +58,7 @@ type Game struct {
 }
 
 func NewGame(states map[string]GameState) (*Game, error) {
-	return &Game{running: true, states: states}, nil
+	return &Game{running: true, states: states, t: time.Now()}, nil
 }
 
 func (g *Game) PollAll() {

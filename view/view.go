@@ -268,6 +268,16 @@ func (v *View) isFaceExposed(x, y, z int, n vec3.T) bool {
 	return v.Get(x, y, z) == 0
 }
 
+func (v *View) Clear(c byte) {
+	for z := 0; z < SizeZ; z++ {
+		for y := 0; y < SizeY; y++ {
+			for x := 0; x < SizeX; x++ {
+				v.data[offset(x, y, z)] = c
+			}
+		}
+	}
+}
+
 func (v *View) Render() error {
 	for _, b := range v.buffers {
 		gl.Uniform3fv(v.normalUniform, b.normal.Slice())
