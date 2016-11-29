@@ -26,6 +26,14 @@ import (
 	"github.com/ungerik/go3d/vec3"
 )
 
+const (
+	SizeX = 128
+	SizeY = 64
+	SizeZ = 128
+)
+
+const cullBackface = false
+
 var (
 	cubeVertices = [24]byte{
 		// front
@@ -143,12 +151,6 @@ func (b *faceBuffer) draw(location gl.Attrib) {
 	}
 }
 
-const (
-	SizeX = 128
-	SizeY = 64
-	SizeZ = 128
-)
-
 func offset(x, y, z int) int {
 	return z*SizeX*SizeY + y*SizeX + x
 }
@@ -234,9 +236,9 @@ func (v *View) BuildBuffers(forward vec3.T) {
 
 	for _, b := range v.buffers {
 		b.reset()
-		//if vec3.Dot(&b.normal, &forward) < 0 {
-		visibleBuffers = append(visibleBuffers, b)
-		//}
+		if !cullBackface || vec3.Dot(&b.normal, &forward) < 0 {
+			visibleBuffers = append(visibleBuffers, b)
+		}
 	}
 
 	for z := 0; z < SizeZ; z++ {

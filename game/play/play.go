@@ -19,10 +19,12 @@ package play
 
 import (
 	"image/color"
+	"log"
 	"math"
 	"time"
 
 	"github.com/andreas-jonsson/voxbox/game"
+	"github.com/andreas-jonsson/voxbox/room"
 	"github.com/andreas-jonsson/voxbox/view"
 	"github.com/andreas-jonsson/voxbox/voxel"
 	"github.com/andreas-jonsson/voxbox/voxel/vox"
@@ -65,7 +67,7 @@ func (img *voxelImage) offset(x, y, z int) int {
 }
 
 type playState struct {
-	img  voxelImage
+	room *room.Room
 	view *view.View
 }
 
@@ -78,13 +80,19 @@ func (s *playState) Name() string {
 }
 
 func (s *playState) Enter(from game.GameState, args ...interface{}) error {
+	s.room = room.NewRoom(voxel.Pt(256, 64, 256), 250*time.Millisecond)
+	if err := s.room.LoadVOXFile("test.vox", voxel.ZP, room.None); err != nil {
+		log.Panicln(err)
+	}
+
 	fp, err := data.FS.Open("test.vox")
 	if err != nil {
 		return err
 	}
 	defer fp.Close()
 
-	if err := vox.Decode(fp, &s.img); err != nil {
+	var img voxelImage
+	if err := vox.Decode(fp, &img); err != nil {
 		return err
 	}
 
@@ -93,7 +101,7 @@ func (s *playState) Enter(from game.GameState, args ...interface{}) error {
 		return err
 	}
 
-	v.SetPalettes(s.img.pal)
+	v.SetPalettes(img.pal)
 	s.view = v
 
 	return nil
@@ -106,16 +114,18 @@ func (s *playState) Exit(to game.GameState) error {
 var anim = 0.0
 
 func (s *playState) Update(gctl game.GameControl) error {
-	dt, tick, _ := gctl.Timing()
+	dt, _, _ := gctl.Timing()
 	gctl.PollAll()
+
+	s.room.Update()
 
 	s.view.Clear(0)
 
 	// ------------- update view ----------------
 
 	anim += dt.Seconds() * 10
-	voxel.Blit(s.view, &s.img, voxel.Pt(0, 0, int(anim)), s.img.Bounds())
-	//voxel.Blit(s.view, &s.img, voxel.ZP, s.img.Bounds())
+	//voxel.Blit(s.view, s.room, voxel.Pt(0, 0, int(anim)), s.room.Bounds())
+	voxel.Blit(s.view, s.room, voxel.ZP, s.room.Bounds())
 
 	// ------------------------------------------
 
@@ -139,7 +149,7 @@ func (s *playState) Update(gctl game.GameControl) error {
 		p mat4.T
 	)
 
-	rot := float32(tick/time.Millisecond) * 0.0005
+	rot := float32(90) //float32(tick/time.Millisecond) * 0.0005
 
 	m.AssignEulerRotation(rot, 0, 0)
 	m.TranslateY(-50)
