@@ -189,6 +189,15 @@ func NewView() (*View, error) {
 	return v, nil
 }
 
+func (v *View) Destroy() {
+	gl.DeleteProgram(v.voxelProgramID)
+	gl.DeleteTexture(v.paletteTextureID)
+
+	for i := range v.buffers {
+		gl.DeleteBuffer(v.buffers[i].vertexBufferID)
+	}
+}
+
 func (v *View) SetGLState() {
 	gl.Disable(gl.CULL_FACE)
 	gl.Disable(gl.BLEND)
@@ -257,6 +266,33 @@ func (v *View) BuildBuffers(forward vec3.T) {
 			}
 		}
 	}
+
+	/*
+		var wg sync.WaitGroup
+		wg.Add(len(visibleBuffers))
+
+		for _, b := range visibleBuffers {
+			go func(b *faceBuffer) {
+				for z := 0; z < SizeZ; z++ {
+					for y := 0; y < SizeY; y++ {
+						for x := 0; x < SizeX; x++ {
+							c := v.Get(x, y, z)
+							if c == 0 {
+								continue
+							}
+
+							if v.isFaceExposed(x, y, z, b.normal) {
+								b.append(byte(x), byte(y), byte(z), c)
+							}
+						}
+					}
+				}
+				wg.Done()
+			}(b)
+		}
+
+		wg.Wait()
+	*/
 }
 
 func (v *View) isFaceExposed(x, y, z int, n vec3.T) bool {

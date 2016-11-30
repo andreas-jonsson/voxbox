@@ -80,10 +80,11 @@ func (s *playState) Name() string {
 }
 
 func (s *playState) Enter(from game.GameState, args ...interface{}) error {
-	s.room = room.NewRoom(voxel.Pt(256, 64, 256), 250*time.Millisecond)
+	s.room = room.NewRoom(voxel.Pt(256, 64, 256), 160*time.Millisecond)
 	if err := s.room.LoadVOXFile("test.vox", voxel.ZP, room.None); err != nil {
 		log.Panicln(err)
 	}
+	s.room.FlagFloor(room.Indestructible)
 
 	fp, err := data.FS.Open("test.vox")
 	if err != nil {
@@ -104,10 +105,14 @@ func (s *playState) Enter(from game.GameState, args ...interface{}) error {
 	v.SetPalettes(img.pal)
 	s.view = v
 
+	s.room.Start()
+
 	return nil
 }
 
 func (s *playState) Exit(to game.GameState) error {
+	s.room.Destroy()
+	s.view.Destroy()
 	return nil
 }
 
@@ -117,15 +122,16 @@ func (s *playState) Update(gctl game.GameControl) error {
 	dt, _, _ := gctl.Timing()
 	gctl.PollAll()
 
-	s.room.Update()
-
 	s.view.Clear(0)
 
 	// ------------- update view ----------------
 
 	anim += dt.Seconds() * 10
-	//voxel.Blit(s.view, s.room, voxel.Pt(0, 0, int(anim)), s.room.Bounds())
-	voxel.Blit(s.view, s.room, voxel.ZP, s.room.Bounds())
+
+	<-s.room.Send(func() {
+		//voxel.Blit(s.view, s.room, voxel.Pt(0, 0, int(anim)), s.room.Bounds())
+		voxel.Blit(s.view, s.room, voxel.ZP, s.room.Bounds())
+	})
 
 	// ------------------------------------------
 
