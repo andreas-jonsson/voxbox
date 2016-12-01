@@ -143,7 +143,7 @@ func NewRenderer(configs ...Config) (*sdlRenderer, error) {
 	}
 
 	rnd.window.SetGrab(true)
-	//sdl.ShowCursor(0)
+	sdl.ShowCursor(0)
 	return &rnd, nil
 }
 

@@ -80,11 +80,10 @@ func (s *playState) Name() string {
 }
 
 func (s *playState) Enter(from game.GameState, args ...interface{}) error {
-	s.room = room.NewRoom(voxel.Pt(256, 64, 256), 160*time.Millisecond)
+	s.room = room.NewRoom(voxel.Pt(256, 64, 256), 16*time.Millisecond)
 	if err := s.room.LoadVOXFile("test.vox", voxel.ZP, room.None); err != nil {
 		log.Panicln(err)
 	}
-	s.room.FlagFloor(room.Indestructible)
 
 	fp, err := data.FS.Open("test.vox")
 	if err != nil {
@@ -138,9 +137,9 @@ func (s *playState) Update(gctl game.GameControl) error {
 	s.view.SetGLState()
 
 	const (
-		near        = 0.01
-		far         = 1000.0
-		angleOfView = 75
+		near        = 1
+		far         = 1000
+		angleOfView = 45
 		aspectRatio = 16 / 9
 	)
 
@@ -155,11 +154,12 @@ func (s *playState) Update(gctl game.GameControl) error {
 		p mat4.T
 	)
 
-	rot := float32(90) //float32(tick/time.Millisecond) * 0.0005
+	//rot := float32(20) //float32(tick/time.Millisecond) * 0.0005
 
-	m.AssignEulerRotation(rot, 0, 0)
-	m.TranslateY(-50)
-	//m.TranslateX(10)
+	m.AssignEulerRotation(0, math.Pi*0.25, 0)
+	m.TranslateX(-45)
+	m.TranslateY(30)
+	m.TranslateZ(-120)
 
 	p.AssignPerspectiveProjection(l, r, b, t, near, far)
 	p.MultMatrix(&m)

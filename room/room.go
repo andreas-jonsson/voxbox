@@ -18,6 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 package room
 
 import (
+	"errors"
 	"image/color"
 	"io"
 	"time"
@@ -30,17 +31,46 @@ import (
 type Flag uint8
 
 const (
-	None           = 0x0
-	Indestructible = 0x80
-	Attached       = 0x40
+	None     = 0x0
+	Falling  = 0x80
+	Attached = 0x40
 )
 
-const attachedOrIndestructible = Attached | Indestructible
+const (
+	invFalling  = 0x7F
+	invAttached = 0xBF
+)
+
+const (
+	attachedOrFalling     = Attached | Falling
+	invAttachedAndFalling = invAttached & invFalling
+)
 
 const (
 	sendBufferSize   = 128
 	markTickDuration = 250 * time.Millisecond
 )
+
+/*
+	var slide4Tab = [...]voxel.Point{
+		voxel.Pt(1, -1, 0),
+		voxel.Pt(-1, -1, 0),
+		voxel.Pt(0, -1, 1),
+		voxel.Pt(0, -1, -1),
+	}
+*/
+var slideTab = [...]voxel.Point{
+	voxel.Pt(-1, -1, -1),
+	voxel.Pt(0, -1, -1),
+	voxel.Pt(1, -1, -1),
+	voxel.Pt(-1, -1, 0),
+	voxel.Pt(1, -1, 0),
+	voxel.Pt(-1, -1, 1),
+	voxel.Pt(0, -1, 1),
+	voxel.Pt(1, -1, 1),
+}
+
+const slideTabLen = uint32(len(slideTab))
 
 type Room struct {
 	loadPos, size voxel.Point
@@ -99,18 +129,6 @@ func (r *Room) Start() {
 	}()
 }
 
-func (r *Room) FlagFloor(flags Flag) {
-	for z := 0; z < r.size.Z; z++ {
-		for x := 0; x < r.size.X; x++ {
-			vIdx := r.offset(x, 0, z)
-			v := r.data[vIdx]
-			if v > 0 {
-				r.data[vIdx] |= uint8(flags)
-			}
-		}
-	}
-}
-
 func (r *Room) markPhase() {
 	box := voxel.Box{Min: voxel.ZP, Max: r.size}
 	normals := [...]voxel.Point{
@@ -127,21 +145,35 @@ func (r *Room) markPhase() {
 			for x := 0; x < r.size.X; x++ {
 				vIdx := r.offset(x, y, z)
 				v := r.data[vIdx]
-				if v == 0 || v&attachedOrIndestructible != 0 {
+
+				if v == 0 {
 					continue
 				}
 
+				if y == 0 {
+					r.data[vIdx] = (v & invFalling) | Attached
+					continue
+				}
+
+				if v&Falling != 0 {
+					continue
+				}
+
+				v &= invAttached
 				p := voxel.Point{X: x, Y: y, Z: z}
+
 				for i := 0; i < 6; i++ {
 					np := p.Add(normals[i])
 					if np.In(box) {
 						nIdx := r.offset(np.X, np.Y, np.Z)
-						if r.data[nIdx]&attachedOrIndestructible != 0 {
-							r.data[vIdx] = v | Attached
+						if r.data[nIdx]&Attached != 0 {
+							v |= Attached
 							break
 						}
 					}
 				}
+
+				r.data[vIdx] = v
 			}
 		}
 	}
@@ -151,26 +183,13 @@ func (r *Room) stepPhase() {
 	// Could use stdlib rand but this is faster.
 	var randSeed uint32
 
-	slideTab := [...]voxel.Point{
-		voxel.Pt(1, -1, 0),
-		voxel.Pt(-1, -1, 0),
-		voxel.Pt(0, -1, 1),
-		voxel.Pt(0, -1, -1),
-	}
-
-	for y := 0; y < r.size.Y; y++ {
+	for y := 1; y < r.size.Y; y++ {
 		for z := 0; z < r.size.Z; z++ {
 			for x := 0; x < r.size.X; x++ {
 				vIdx := r.offset(x, y, z)
 				v := r.data[vIdx]
 
-				if v == 0 || v&attachedOrIndestructible != 0 {
-					continue
-				}
-
-				if y == 0 {
-					r.data[vIdx] = 0
-					//r.data[vIdx] = v | Attached
+				if v == 0 || v&Attached != 0 {
 					continue
 				}
 
@@ -179,30 +198,21 @@ func (r *Room) stepPhase() {
 
 				if nv == 0 {
 					r.data[vIdx] = 0
-					r.data[nIdx] = v
-					continue
-				}
-
-				if nv&attachedOrIndestructible != 0 {
+					r.data[nIdx] = v | Falling
+				} else {
 					randSeed = randSeed*1664525 + 1013904223
 					rnd := randSeed >> 24
 
-					// Rand 50%
-					if rnd%2 == 0 {
-						// Might slide sideways
-						sn := slideTab[rnd%4]
-						snIdx := r.offset(x+sn.X, y+sn.Y, z+sn.Z)
-						snv := r.data[snIdx]
+					sn := slideTab[rnd%slideTabLen]
+					snIdx := r.offset(x+sn.X, y+sn.Y, z+sn.Z)
+					snv := r.data[snIdx]
 
-						if snv == 0 {
-							r.data[vIdx] = 0
-							r.data[snIdx] = v
-							continue
-						}
-
+					if snv == 0 {
+						r.data[vIdx] = 0
+						r.data[snIdx] = v | Falling
+					} else {
+						r.data[vIdx] = (v & invAttachedAndFalling) | (nv & attachedOrFalling)
 					}
-
-					r.data[vIdx] = v | Attached
 				}
 			}
 		}
@@ -226,7 +236,7 @@ func (r *Room) Set(x, y, z int, index uint8) {
 
 	var cIdx uint8
 	if index > 0 {
-		cIdx = (0x3F & index) | uint8(r.flags)
+		cIdx = (invAttachedAndFalling & index) | uint8(r.flags)
 	}
 
 	if x < r.size.X && y < r.size.Y && z < r.size.Z {
@@ -239,30 +249,34 @@ func (r *Room) Set(x, y, z int, index uint8) {
 }
 
 func (r *Room) Get(x, y, z int) uint8 {
-	return r.data[r.offset(x, y, z)] & 0x3F
+	return r.data[r.offset(x, y, z)] & invAttachedAndFalling
 }
 
 func (r *Room) offset(x, y, z int) int {
 	return z*r.size.X*r.size.Y + y*r.size.X + x
 }
 
-func (r *Room) LoadVOXFile(file string, at voxel.Point, flags Flag) error {
+func (r *Room) LoadVOXFile(file string, at voxel.Point, flag Flag) error {
 	fp, err := data.FS.Open(file)
 	if err != nil {
 		return err
 	}
 	defer fp.Close()
-	return r.LoadVOX(fp, at, flags)
+	return r.LoadVOX(fp, at, flag)
 }
 
-func (r *Room) LoadVOX(reader io.Reader, at voxel.Point, flags Flag) error {
+func (r *Room) LoadVOX(reader io.Reader, at voxel.Point, flag Flag) error {
+	if flag&Attached != 0 && flag&Falling != 0 {
+		return errors.New("Attached and Falling flag can't be set at the same time")
+	}
+
 	lp := r.loadPos
 	flip := r.flipYZ
 	fl := r.flags
 
 	r.loadPos = at
 	r.flipYZ = true
-	r.flags = flags
+	r.flags = flag
 
 	err := vox.Decode(reader, r)
 

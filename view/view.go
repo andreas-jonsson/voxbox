@@ -348,7 +348,7 @@ var vertexShaderSrc = `
 		// Lighting
 
 		const vec3 lightColor = vec3(1,1,1);
-		vec3 lightDir = normalize(vec3(1,1,1));
+		vec3 lightDir = normalize(vec3(-1,1,-1));
 
 		const float ambientStrength = 0.8;
 		vec3 ambient = ambientStrength * lightColor;
