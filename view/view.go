@@ -23,6 +23,7 @@ import (
 	"github.com/andreas-jonsson/voxbox/voxel"
 	"github.com/goxjs/gl"
 	"github.com/goxjs/gl/glutil"
+	"github.com/ungerik/go3d/mat4"
 	"github.com/ungerik/go3d/vec3"
 )
 
@@ -161,6 +162,10 @@ type View struct {
 	buffers          [6]*faceBuffer
 	data             []uint8
 
+	mvpMatrix,
+	modelMatrix,
+	viewMatrix mat4.T
+
 	voxelProgramID gl.Program
 	positionAttrib gl.Attrib
 	normalUniform,
@@ -170,8 +175,13 @@ type View struct {
 func NewView() (*View, error) {
 	v := &View{
 		paletteTextureID: gl.CreateTexture(),
+		modelMatrix:      mat4.Ident,
 		data:             make([]uint8, SizeX*SizeY*SizeZ),
 	}
+
+	m := &v.modelMatrix
+	m.TranslateX(-SizeX / 2)
+	m.TranslateZ(-SizeZ / 2)
 
 	var err error
 	v.voxelProgramID, err = glutil.CreateProgram(vertexShaderSrc, fragmentShaderSrc)
@@ -240,12 +250,22 @@ func (v *View) Get(x, y, z int) uint8 {
 	return v.data[offset(x, y, z)]
 }
 
-func (v *View) BuildBuffers(forward vec3.T) {
-	var visibleBuffers []*faceBuffer
+func (v *View) BuildBuffers(proj, view *mat4.T) {
+	v.viewMatrix = *view
 
+	// Calculate MVP matrix.
+	modelViewMatrix := v.viewMatrix
+	modelViewMatrix.MultMatrix(&v.modelMatrix)
+	v.mvpMatrix = *proj
+	v.mvpMatrix.MultMatrix(&modelViewMatrix)
+
+	m := modelViewMatrix.Array()
+	forward := vec3.T{m[2], m[6], -m[10]}
+
+	var visibleBuffers []*faceBuffer
 	for _, b := range v.buffers {
 		b.reset()
-		if !cullBackface || vec3.Dot(&b.normal, &forward) < 0 {
+		if !cullBackface || vec3.Dot(&b.normal, &forward) > 0 {
 			visibleBuffers = append(visibleBuffers, b)
 		}
 	}
@@ -317,6 +337,20 @@ func (v *View) Clear(c byte) {
 }
 
 func (v *View) Render() error {
+	mvp := gl.GetUniformLocation(v.voxelProgramID, "u_mvp")
+
+	m := v.mvpMatrix
+	gl.UniformMatrix4fv(mvp, m.Slice())
+
+	m = v.viewMatrix
+	m.MultMatrix(&v.modelMatrix)
+
+	//m.Invert()
+	//m.Transpose()
+
+	mv := gl.GetUniformLocation(v.voxelProgramID, "u_mv")
+	gl.UniformMatrix4fv(mv, m.Slice())
+
 	for _, b := range v.buffers {
 		gl.Uniform3fv(v.normalUniform, b.normal.Slice())
 		b.draw(v.positionAttrib)
@@ -324,16 +358,11 @@ func (v *View) Render() error {
 	return nil
 }
 
-//TODO Remove the need for this.
-func (v *View) ProgramID() gl.Program {
-	return v.voxelProgramID
-}
-
 var vertexShaderSrc = `
 	#version 120
 
 	uniform mat4 u_mvp;
-	uniform mat4 u_model_inv;
+	uniform mat4 u_mv;
 	uniform vec3 u_normal;
 
 	attribute vec4 a_position;
@@ -353,7 +382,7 @@ var vertexShaderSrc = `
 		const float ambientStrength = 0.8;
 		vec3 ambient = ambientStrength * lightColor;
 
-		//vec3 normal = normalize(mat3(u_model_inv) * u_normal);
+		//vec3 normal = normalize(mat3(u_mv) * u_normal);
 		vec3 normal = u_normal;
 
 		float diff = max(dot(normal, lightDir), 0);

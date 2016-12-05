@@ -48,7 +48,7 @@ const (
 
 const (
 	sendBufferSize   = 128
-	markTickDuration = 250 * time.Millisecond
+	markTickDuration = 500 * time.Millisecond
 )
 
 /*
@@ -230,19 +230,25 @@ func (r *Room) SetPalette(pal color.Palette) {
 }
 
 func (r *Room) Set(x, y, z int, index uint8) {
-	x += r.loadPos.X
-	y += r.loadPos.Y
-	z += r.loadPos.Z
-
 	var cIdx uint8
 	if index > 0 {
 		cIdx = (invAttachedAndFalling & index) | uint8(r.flags)
 	}
 
-	if x < r.size.X && y < r.size.Y && z < r.size.Z {
-		if r.flipYZ {
+	if r.flipYZ {
+		x += r.loadPos.X
+		z += r.loadPos.Y
+		y += r.loadPos.Z
+
+		if x < r.size.X && z < r.size.Y && y < r.size.Z {
 			r.data[r.offset(x, z, y)] = cIdx
-		} else {
+		}
+	} else {
+		x += r.loadPos.X
+		y += r.loadPos.Y
+		z += r.loadPos.Z
+
+		if x < r.size.X && y < r.size.Y && z < r.size.Z {
 			r.data[r.offset(x, y, z)] = cIdx
 		}
 	}

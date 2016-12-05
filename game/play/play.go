@@ -18,12 +18,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 package play
 
 import (
-	"image/color"
+	"image/color/palette"
 	"log"
 	"math"
 	"time"
 
 	"github.com/andreas-jonsson/voxbox/game"
+	"github.com/andreas-jonsson/voxbox/game/player"
 	"github.com/andreas-jonsson/voxbox/room"
 	"github.com/andreas-jonsson/voxbox/view"
 	"github.com/andreas-jonsson/voxbox/voxel"
@@ -31,44 +32,12 @@ import (
 	"github.com/andreas-jonsson/warp/data"
 	"github.com/goxjs/gl"
 	"github.com/ungerik/go3d/mat4"
-	"github.com/ungerik/go3d/vec3"
 )
 
-type voxelImage struct {
-	pal  color.Palette
-	size voxel.Point
-	data []uint8
-}
-
-func (img *voxelImage) Bounds() voxel.Box {
-	return voxel.Box{Min: voxel.ZP, Max: img.size}
-}
-
-func (img *voxelImage) SetBounds(b voxel.Box) {
-	img.size = voxel.Pt(b.Max.X, b.Max.Z, b.Max.Y)
-	sz := b.Max.X * b.Max.Y * b.Max.Z
-	img.data = make([]uint8, sz)
-}
-
-func (img *voxelImage) SetPalette(pal color.Palette) {
-	img.pal = pal
-}
-
-func (img *voxelImage) Set(x, y, z int, index uint8) {
-	img.data[img.offset(x, z, y)] = index
-}
-
-func (img *voxelImage) Get(x, y, z int) uint8 {
-	return img.data[img.offset(x, y, z)]
-}
-
-func (img *voxelImage) offset(x, y, z int) int {
-	return z*img.size.X*img.size.Y + y*img.size.X + x
-}
-
 type playState struct {
-	room *room.Room
-	view *view.View
+	room   *room.Room
+	view   *view.View
+	player *player.Player
 }
 
 func NewPlayState() *playState {
@@ -81,8 +50,19 @@ func (s *playState) Name() string {
 
 func (s *playState) Enter(from game.GameState, args ...interface{}) error {
 	s.room = room.NewRoom(voxel.Pt(256, 64, 256), 16*time.Millisecond)
-	if err := s.room.LoadVOXFile("test.vox", voxel.ZP, room.None); err != nil {
-		log.Panicln(err)
+
+	voxPos := []voxel.Point{
+		voxel.Pt(0, 0, 0),
+		voxel.Pt(97, 0, 0),
+		voxel.Pt(0, 0, 97),
+		voxel.Pt(97, 0, 97),
+	}
+
+	flags := room.Flag(room.Attached)
+	for _, pos := range voxPos {
+		if err := s.room.LoadVOXFile("test.vox", pos, flags); err != nil {
+			log.Panicln(err)
+		}
 	}
 
 	fp, err := data.FS.Open("test.vox")
@@ -91,8 +71,8 @@ func (s *playState) Enter(from game.GameState, args ...interface{}) error {
 	}
 	defer fp.Close()
 
-	var img voxelImage
-	if err := vox.Decode(fp, &img); err != nil {
+	img := voxel.NewPaletted(palette.Plan9, voxel.ZB)
+	if err := vox.Decode(fp, img); err != nil {
 		return err
 	}
 
@@ -101,10 +81,20 @@ func (s *playState) Enter(from game.GameState, args ...interface{}) error {
 		return err
 	}
 
-	v.SetPalettes(img.pal)
+	v.SetPalettes(img.Palette)
 	s.view = v
 
 	s.room.Start()
+
+	s.player = player.NewPlayer(func(p *player.Player, img voxel.Image) error {
+		voxel.BlitOp(s.view, img, voxel.ZP, img.Bounds(), func(dst, src voxel.Image, dx, dy, dz, sx, sy, sz int) {
+			c := src.Get(sx, sy, sz)
+			if c > 0 {
+				dst.Set(dx, dy, dz, c)
+			}
+		})
+		return nil
+	})
 
 	return nil
 }
@@ -118,7 +108,7 @@ func (s *playState) Exit(to game.GameState) error {
 var anim = 0.0
 
 func (s *playState) Update(gctl game.GameControl) error {
-	dt, _, _ := gctl.Timing()
+	dt, tick, _ := gctl.Timing()
 	gctl.PollAll()
 
 	s.view.Clear(0)
@@ -132,14 +122,16 @@ func (s *playState) Update(gctl game.GameControl) error {
 		voxel.Blit(s.view, s.room, voxel.ZP, s.room.Bounds())
 	})
 
+	s.player.Render()
+
 	// ------------------------------------------
 
 	s.view.SetGLState()
 
 	const (
-		near        = 1
-		far         = 1000
-		angleOfView = 45
+		near        = 0.1
+		far         = 10000
+		angleOfView = 25
 		aspectRatio = 16 / 9
 	)
 
@@ -150,35 +142,21 @@ func (s *playState) Update(gctl game.GameControl) error {
 	b := -t
 
 	var (
-		m = mat4.Ident
-		p mat4.T
+		viewMatrix,
+		projMatrix mat4.T
 	)
 
-	//rot := float32(20) //float32(tick/time.Millisecond) * 0.0005
+	/********/
+	rot := float32(tick/time.Millisecond) * 0.0005
+	viewMatrix.AssignEulerRotation(rot, math.Pi*0.25, 0)
+	/********/
 
-	m.AssignEulerRotation(0, math.Pi*0.25, 0)
-	m.TranslateX(-45)
-	m.TranslateY(30)
-	m.TranslateZ(-120)
+	viewMatrix.AssignEulerRotation(0, math.Pi*0.32, 0)
+	//viewMatrix.TranslateY(-5)
+	viewMatrix.TranslateZ(-320)
 
-	p.AssignPerspectiveProjection(l, r, b, t, near, far)
-	p.MultMatrix(&m)
-
-	// Build buffers
-	forward := vec3.T{0, 0, 1}
-	q := m.Quaternion()
-	q.Invert().RotateVec3(&forward)
-	s.view.BuildBuffers(forward)
-
-	voxelProgramID := s.view.ProgramID()
-	mvp := gl.GetUniformLocation(voxelProgramID, "u_mvp")
-	gl.UniformMatrix4fv(mvp, p.Slice())
-
-	m.Invert()
-	m.Transpose()
-
-	minv := gl.GetUniformLocation(voxelProgramID, "u_model_inv")
-	gl.UniformMatrix4fv(minv, m.Slice())
+	projMatrix.AssignPerspectiveProjection(l, r, b, t, near, far)
+	s.view.BuildBuffers(&projMatrix, &viewMatrix)
 
 	gl.ClearColor(0.6, 0.6, 0.6, 1)
 
