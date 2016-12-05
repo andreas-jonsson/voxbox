@@ -25,6 +25,7 @@ import (
 
 	"github.com/andreas-jonsson/voxbox/game"
 	"github.com/andreas-jonsson/voxbox/game/player"
+	"github.com/andreas-jonsson/voxbox/platform"
 	"github.com/andreas-jonsson/voxbox/room"
 	"github.com/andreas-jonsson/voxbox/view"
 	"github.com/andreas-jonsson/voxbox/voxel"
@@ -48,9 +49,7 @@ func (s *playState) Name() string {
 	return "play"
 }
 
-func (s *playState) Enter(from game.GameState, args ...interface{}) error {
-	s.room = room.NewRoom(voxel.Pt(256, 64, 256), 16*time.Millisecond)
-
+func loadRoom(r *room.Room, flags room.Flag) {
 	voxPos := []voxel.Point{
 		voxel.Pt(0, 0, 0),
 		voxel.Pt(97, 0, 0),
@@ -58,12 +57,16 @@ func (s *playState) Enter(from game.GameState, args ...interface{}) error {
 		voxel.Pt(97, 0, 97),
 	}
 
-	flags := room.Flag(room.Attached)
 	for _, pos := range voxPos {
-		if err := s.room.LoadVOXFile("test.vox", pos, flags); err != nil {
+		if err := r.LoadVOXFile("test.vox", pos, flags); err != nil {
 			log.Panicln(err)
 		}
 	}
+}
+
+func (s *playState) Enter(from game.GameState, args ...interface{}) error {
+	s.room = room.NewRoom(voxel.Pt(256, 64, 256), 16*time.Millisecond)
+	loadRoom(s.room, room.Flag(room.Attached))
 
 	fp, err := data.FS.Open("test.vox")
 	if err != nil {
@@ -86,15 +89,8 @@ func (s *playState) Enter(from game.GameState, args ...interface{}) error {
 
 	s.room.Start()
 
-	s.player = player.NewPlayer(func(p *player.Player, img voxel.Image) error {
-		voxel.BlitOp(s.view, img, voxel.ZP, img.Bounds(), func(dst, src voxel.Image, dx, dy, dz, sx, sy, sz int) {
-			c := src.Get(sx, sy, sz)
-			if c > 0 {
-				dst.Set(dx, dy, dz, c)
-			}
-		})
-		return nil
-	})
+	s.player = player.NewPlayer(s.view)
+	s.player.SetRoom(s.room)
 
 	return nil
 }
@@ -109,7 +105,21 @@ var anim = 0.0
 
 func (s *playState) Update(gctl game.GameControl) error {
 	dt, tick, _ := gctl.Timing()
-	gctl.PollAll()
+
+	for ev := gctl.PollEvent(); ev != nil; ev = gctl.PollEvent() {
+		switch t := ev.(type) {
+		case *platform.KeyDownEvent:
+			switch t.Key {
+			case platform.KeyReturn:
+				s.player.Die()
+			case platform.KeyLeft:
+				s.room.Send(func() {
+					s.room.Clear()
+					loadRoom(s.room, room.Flag(room.None))
+				})
+			}
+		}
+	}
 
 	s.view.Clear(0)
 

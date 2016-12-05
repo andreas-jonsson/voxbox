@@ -58,7 +58,19 @@ const (
 		voxel.Pt(0, -1, 1),
 		voxel.Pt(0, -1, -1),
 	}
+
+	var slideTab = [...]voxel.Point{
+		voxel.Pt(-1, -1, -1),
+		voxel.Pt(0, -1, -1),
+		voxel.Pt(1, -1, -1),
+		voxel.Pt(-1, -1, 0),
+		voxel.Pt(1, -1, 0),
+		voxel.Pt(-1, -1, 1),
+		voxel.Pt(0, -1, 1),
+		voxel.Pt(1, -1, 1),
+	}
 */
+
 var slideTab = [...]voxel.Point{
 	voxel.Pt(-1, -1, -1),
 	voxel.Pt(0, -1, -1),
@@ -68,12 +80,22 @@ var slideTab = [...]voxel.Point{
 	voxel.Pt(-1, -1, 1),
 	voxel.Pt(0, -1, 1),
 	voxel.Pt(1, -1, 1),
+
+	voxel.Pt(-1, 0, -1),
+	voxel.Pt(0, 0, -1),
+	voxel.Pt(1, 0, -1),
+	voxel.Pt(-1, 0, 0),
+	voxel.Pt(1, 0, 0),
+	voxel.Pt(-1, 0, 1),
+	voxel.Pt(0, 0, 1),
+	voxel.Pt(1, 0, 1),
 }
 
 const slideTabLen = uint32(len(slideTab))
 
 type Room struct {
 	loadPos, size voxel.Point
+	bounds        voxel.Box
 	flipYZ        bool
 	flags         Flag
 	data          []uint8
@@ -91,6 +113,7 @@ func NewRoom(size voxel.Point, simSpeed time.Duration) *Room {
 		stepTicker: time.NewTicker(simSpeed),
 		markTicker: time.NewTicker(markTickDuration),
 		size:       size,
+		bounds:     voxel.Box{Min: voxel.ZP, Max: size},
 		data:       make([]uint8, size.X*size.Y*size.Z),
 	}
 }
@@ -109,6 +132,12 @@ func (r *Room) Destroy() {
 	r.stepTicker.Stop()
 	r.markTicker.Stop()
 
+}
+
+func (r *Room) Clear() {
+	for i := range r.data {
+		r.data[i] = 0
+	}
 }
 
 func (r *Room) Start() {
@@ -130,7 +159,7 @@ func (r *Room) Start() {
 }
 
 func (r *Room) markPhase() {
-	box := voxel.Box{Min: voxel.ZP, Max: r.size}
+	box := r.bounds
 	normals := [...]voxel.Point{
 		voxel.Pt(1, 0, 0),
 		voxel.Pt(-1, 0, 0),
@@ -180,8 +209,8 @@ func (r *Room) markPhase() {
 }
 
 func (r *Room) stepPhase() {
-	// Could use stdlib rand but this is faster.
-	var randSeed uint32
+	var randSeed uint32 // Could use stdlib rand but this is faster.
+	box := r.bounds
 
 	for y := 1; y < r.size.Y; y++ {
 		for z := 0; z < r.size.Z; z++ {
@@ -204,7 +233,14 @@ func (r *Room) stepPhase() {
 					rnd := randSeed >> 24
 
 					sn := slideTab[rnd%slideTabLen]
-					snIdx := r.offset(x+sn.X, y+sn.Y, z+sn.Z)
+					snp := voxel.Point{X: x + sn.X, Y: y + sn.Y, Z: z + sn.Z}
+
+					if !snp.In(box) {
+						r.data[vIdx] = (v & invAttachedAndFalling) | (nv & attachedOrFalling)
+						continue
+					}
+
+					snIdx := r.offset(snp.X, snp.Y, snp.Z)
 					snv := r.data[snIdx]
 
 					if snv == 0 {
@@ -220,7 +256,7 @@ func (r *Room) stepPhase() {
 }
 
 func (r *Room) Bounds() voxel.Box {
-	return voxel.Box{Min: voxel.ZP, Max: r.size}
+	return r.bounds
 }
 
 func (r *Room) SetBounds(b voxel.Box) {

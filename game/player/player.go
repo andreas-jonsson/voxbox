@@ -20,22 +20,21 @@ package player
 import (
 	"log"
 
+	"github.com/andreas-jonsson/voxbox/room"
 	"github.com/andreas-jonsson/voxbox/voxel"
 	"github.com/andreas-jonsson/voxbox/voxel/vox"
 	"github.com/andreas-jonsson/warp/data"
-	"github.com/ungerik/go3d/vec3"
 )
 
 type Player struct {
-	forward    vec3.T
-	renderFunc RenderFunc
-	image      voxel.Paletted
+	image voxel.Paletted
+	view  voxel.Image
+	room  *room.Room
+	alive bool
 }
 
-type RenderFunc func(*Player, voxel.Image) error
-
-func NewPlayer(rf RenderFunc) *Player {
-	p := &Player{renderFunc: rf}
+func NewPlayer(view voxel.Image) *Player {
+	p := &Player{view: view, alive: true}
 
 	fp, err := data.FS.Open("player.vox")
 	if err != nil {
@@ -54,6 +53,30 @@ func NewPlayer(rf RenderFunc) *Player {
 	return p
 }
 
-func (p *Player) Render() error {
-	return p.renderFunc(p, &p.image)
+func (p *Player) SetRoom(r *room.Room) {
+	p.room = r
+}
+
+func (p *Player) blit(dst voxel.Image) {
+	voxel.BlitOp(dst, &p.image, voxel.ZP, p.image.Bounds(), func(dst, src voxel.Image, dx, dy, dz, sx, sy, sz int) {
+		c := src.Get(sx, sy, sz)
+		if c > 0 {
+			dst.Set(dx, dy, dz, c)
+		}
+	})
+}
+
+func (p *Player) Die() {
+	p.alive = false
+
+	// 	Do not wait for result.
+	p.room.Send(func() {
+		p.blit(p.room)
+	})
+}
+
+func (p *Player) Render() {
+	if p.alive {
+		p.blit(p.view)
+	}
 }
