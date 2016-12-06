@@ -58,19 +58,19 @@ const (
 		voxel.Pt(0, -1, 1),
 		voxel.Pt(0, -1, -1),
 	}
-
-	var slideTab = [...]voxel.Point{
-		voxel.Pt(-1, -1, -1),
-		voxel.Pt(0, -1, -1),
-		voxel.Pt(1, -1, -1),
-		voxel.Pt(-1, -1, 0),
-		voxel.Pt(1, -1, 0),
-		voxel.Pt(-1, -1, 1),
-		voxel.Pt(0, -1, 1),
-		voxel.Pt(1, -1, 1),
-	}
 */
+var slideTab = [...]voxel.Point{
+	voxel.Pt(-1, -1, -1),
+	voxel.Pt(0, -1, -1),
+	voxel.Pt(1, -1, -1),
+	voxel.Pt(-1, -1, 0),
+	voxel.Pt(1, -1, 0),
+	voxel.Pt(-1, -1, 1),
+	voxel.Pt(0, -1, 1),
+	voxel.Pt(1, -1, 1),
+}
 
+/*
 var slideTab = [...]voxel.Point{
 	voxel.Pt(-1, -1, -1),
 	voxel.Pt(0, -1, -1),
@@ -90,6 +90,7 @@ var slideTab = [...]voxel.Point{
 	voxel.Pt(0, 0, 1),
 	voxel.Pt(1, 0, 1),
 }
+*/
 
 const slideTabLen = uint32(len(slideTab))
 

@@ -115,7 +115,7 @@ func (s *playState) Update(gctl game.GameControl) error {
 			case platform.KeyLeft:
 				s.room.Send(func() {
 					s.room.Clear()
-					loadRoom(s.room, room.Flag(room.None))
+					loadRoom(s.room, room.Flag(room.Falling))
 				})
 			}
 		}

@@ -67,12 +67,14 @@ func (p *Player) blit(dst voxel.Image) {
 }
 
 func (p *Player) Die() {
-	p.alive = false
+	if p.alive {
+		p.alive = false
 
-	// 	Do not wait for result.
-	p.room.Send(func() {
-		p.blit(p.room)
-	})
+		// 	Do not wait for result.
+		p.room.Send(func() {
+			p.blit(p.room)
+		})
+	}
 }
 
 func (p *Player) Render() {

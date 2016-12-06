@@ -1,3 +1,5 @@
+// +build mobile
+
 /*
 Copyright (C) 2016 Andreas T Jonsson
 
@@ -15,12 +17,37 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-//go:generate go run data/generate.go
+package platform
 
-package main
+import "github.com/goxjs/gl"
 
-import "github.com/andreas-jonsson/voxbox/entry"
+type mobileRenderer struct {
+}
 
-func main() {
-	entry.Entry()
+func NewRenderer(configs ...Config) (*mobileRenderer, error) {
+	r := mobileRenderer{}
+
+	for _, cfg := range configs {
+		if err = cfg(&rnd); err != nil {
+			return nil, err
+		}
+	}
+
+	return &r, nil
+}
+
+func (p *mobileRenderer) ToggleFullscreen() {
+}
+
+func (p *mobileRenderer) Clear() {
+	gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+}
+
+func (p *mobileRenderer) Present() {
+}
+
+func (p *mobileRenderer) Shutdown() {
+}
+
+func (p *mobileRenderer) SetWindowTitle(title string) {
 }
