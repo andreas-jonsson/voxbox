@@ -21,7 +21,10 @@ const (
 	SizeZ = 128
 )
 
-const cullBackface = false
+const (
+	cullBackface = false
+	nBuffers     = 1
+)
 
 var (
 	cubeVertices = [24]byte{
@@ -98,19 +101,25 @@ const (
 )
 
 type faceBuffer struct {
-	vertexBuffer   []byte
-	vertexBufferID gl.Buffer
-	indices        [6]int
-	normal         vec3.T
-	face           faceName
+	vertexBuffer    []byte
+	vertexBufferIDs [nBuffers]gl.Buffer
+	bufferCount     uint32
+	indices         [6]int
+	normal          vec3.T
+	face            faceName
 }
 
 func newFaceBuffer(face faceName) *faceBuffer {
+	var buffers [nBuffers]gl.Buffer
+	for i := range buffers {
+		buffers[i] = gl.CreateBuffer()
+	}
+
 	return &faceBuffer{
-		vertexBufferID: gl.CreateBuffer(),
-		indices:        facesIndices[face],
-		normal:         facesNormals[face],
-		face:           face,
+		vertexBufferIDs: buffers,
+		indices:         facesIndices[face],
+		normal:          facesNormals[face],
+		face:            face,
 	}
 }
 
@@ -130,13 +139,14 @@ func (b *faceBuffer) append(x, y, z, color byte) {
 
 func (b *faceBuffer) draw(location gl.Attrib) {
 	if len(b.vertexBuffer) > 0 {
-		gl.BindBuffer(gl.ARRAY_BUFFER, b.vertexBufferID)
+		gl.BindBuffer(gl.ARRAY_BUFFER, b.vertexBufferIDs[b.bufferCount%nBuffers])
 		gl.BufferData(gl.ARRAY_BUFFER, b.vertexBuffer, gl.STREAM_DRAW)
 
 		gl.VertexAttribPointer(location, 4, gl.UNSIGNED_BYTE, false, 0, 0)
 		gl.EnableVertexAttribArray(location)
 
 		gl.DrawArrays(gl.TRIANGLES, 0, len(b.vertexBuffer)/4)
+		b.bufferCount++
 	}
 }
 
@@ -192,7 +202,9 @@ func (v *View) Destroy() {
 	gl.DeleteTexture(v.paletteTextureID)
 
 	for i := range v.buffers {
-		gl.DeleteBuffer(v.buffers[i].vertexBufferID)
+		for _, id := range v.buffers[i].vertexBufferIDs {
+			gl.DeleteBuffer(id)
+		}
 	}
 }
 

@@ -145,5 +145,4 @@ func (g *Game) Render() error {
 }
 
 func (g *Game) Shutdown() {
-
 }

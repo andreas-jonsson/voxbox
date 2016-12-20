@@ -16,6 +16,8 @@ var banner = `
 `
 
 func main() {
+	//defer profile.Start(profile.ProfilePath(".")).Stop()
+
 	fmt.Println(banner)
 	entry.Entry()
 }

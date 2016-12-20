@@ -23,7 +23,7 @@ func Entry() {
 	}
 	defer platform.Shutdown()
 
-	rnd, err := platform.NewRenderer(platform.ConfigWithDiv(2), platform.ConfigWithNoVSync, platform.ConfigWithDebug)
+	rnd, err := platform.NewRenderer(platform.ConfigWithDiv(2), platform.ConfigWithNoVSync) //, platform.ConfigWithDebug)
 	if err != nil {
 		log.Panicln(err)
 	}
