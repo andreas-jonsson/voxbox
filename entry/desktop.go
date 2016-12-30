@@ -29,6 +29,8 @@ func Entry() {
 	}
 	defer rnd.Shutdown()
 
+	platform.LogGLInfo()
+
 	states := map[string]game.GameState{
 		"menu": menu.NewMenuState(),
 		"play": play.NewPlayState(),

@@ -11,6 +11,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/andreas-jonsson/voxbox/view"
 	"github.com/andreas-jonsson/voxbox/voxel"
 	"github.com/andreas-jonsson/voxbox/voxel/vox"
 	"github.com/andreas-jonsson/warp/data"
@@ -124,9 +125,11 @@ func (r *Room) Destroy() {
 }
 
 func (r *Room) Clear() {
-	for i := range r.data {
-		r.data[i] = 0
-	}
+	r.Send(func() {
+		for i := range r.data {
+			r.data[i] = 0
+		}
+	})
 }
 
 func (r *Room) Start() {
@@ -141,7 +144,6 @@ func (r *Room) Start() {
 				f()
 			case <-r.stopChan:
 				break
-			default:
 			}
 		}
 	}()
@@ -242,6 +244,35 @@ func (r *Room) stepPhase() {
 			}
 		}
 	}
+}
+
+func (r *Room) BlitToView(dst *view.View, dp voxel.Point, sr voxel.Box) <-chan struct{} {
+	return r.Send(func() {
+		sr = sr.Intersect(r.Bounds())
+		dr := voxel.Box{Min: dp, Max: sr.Size().Add(dp)}
+		b := dst.Bounds().Intersect(dr)
+
+		blockSize := b.Max.X - b.Min.X
+		dstSize := dst.Bounds().Max
+		srcSize := r.Bounds().Max
+		dstData := dst.Data()
+
+		for z, sz := b.Min.Z, sr.Min.Z; z < b.Max.Z; z++ {
+			for y, sy := b.Min.Y, sr.Min.Y; y < b.Max.Y; y++ {
+
+				dstStart := z*dstSize.X*dstSize.Y + y*dstSize.X + b.Min.X
+				dstSlice := dstData[dstStart : dstStart+blockSize]
+				srcStart := sz*srcSize.X*srcSize.Y + sy*srcSize.X + sr.Min.X
+
+				for i, v := range r.data[srcStart : srcStart+blockSize] {
+					dstSlice[i] = v & invAttachedAndFalling
+				}
+
+				sy++
+			}
+			sz++
+		}
+	})
 }
 
 func (r *Room) Bounds() voxel.Box {

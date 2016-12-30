@@ -41,8 +41,15 @@ func loadRoom(r *room.Room, flags room.Flag) {
 	voxPos := []voxel.Point{
 		voxel.Pt(0, 0, 0),
 		voxel.Pt(97, 0, 0),
+		voxel.Pt(194, 0, 0),
+
 		voxel.Pt(0, 0, 97),
 		voxel.Pt(97, 0, 97),
+		voxel.Pt(194, 0, 97),
+
+		voxel.Pt(0, 0, 194),
+		voxel.Pt(97, 0, 194),
+		voxel.Pt(194, 0, 194),
 	}
 
 	for _, pos := range voxPos {
@@ -101,8 +108,8 @@ func (s *playState) Update(gctl game.GameControl) error {
 			case platform.KeyReturn:
 				s.player.Die()
 			case platform.KeyLeft:
+				s.room.Clear()
 				s.room.Send(func() {
-					s.room.Clear()
 					loadRoom(s.room, room.Flag(room.Falling))
 				})
 			}
@@ -115,10 +122,11 @@ func (s *playState) Update(gctl game.GameControl) error {
 
 	anim += dt.Seconds() * 10
 
-	<-s.room.Send(func() {
-		//voxel.Blit(s.view, s.room, voxel.Pt(0, 0, int(anim)), s.room.Bounds())
-		voxel.Blit(s.view, s.room, voxel.ZP, s.room.Bounds())
-	})
+	//<-s.room.Send(func() {
+	//voxel.Blit(s.view, s.room, voxel.Pt(0, 0, int(anim)), s.room.Bounds())
+	//})
+
+	<-s.room.BlitToView(s.view, voxel.ZP, s.room.Bounds())
 
 	s.player.Render()
 
@@ -129,7 +137,7 @@ func (s *playState) Update(gctl game.GameControl) error {
 	const (
 		near        = 0.1
 		far         = 10000
-		angleOfView = 25
+		angleOfView = 90
 		aspectRatio = 16 / 9
 	)
 
@@ -149,9 +157,9 @@ func (s *playState) Update(gctl game.GameControl) error {
 	viewMatrix.AssignEulerRotation(rot, math.Pi*0.25, 0)
 	/********/
 
-	viewMatrix.AssignEulerRotation(0, math.Pi*0.32, 0)
-	//viewMatrix.TranslateY(-5)
-	viewMatrix.TranslateZ(-320)
+	viewMatrix.AssignEulerRotation(0, math.Pi*0.35, 0)
+	//viewMatrix.TranslateY(80)
+	viewMatrix.TranslateZ(-160)
 
 	projMatrix.AssignPerspectiveProjection(l, r, b, t, near, far)
 	s.view.BuildBuffers(&projMatrix, &viewMatrix)

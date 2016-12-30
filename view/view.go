@@ -7,6 +7,7 @@ package view
 
 import (
 	"image/color"
+	"sync"
 
 	"github.com/andreas-jonsson/voxbox/voxel"
 	"github.com/goxjs/gl"
@@ -16,9 +17,9 @@ import (
 )
 
 const (
-	SizeX = 128
-	SizeY = 64
-	SizeZ = 128
+	SizeX = 160
+	SizeY = 80
+	SizeZ = 160
 )
 
 const (
@@ -208,8 +209,12 @@ func (v *View) Destroy() {
 	}
 }
 
+func (v *View) Data() []uint8 {
+	return v.data
+}
+
 func (v *View) SetGLState() {
-	gl.Disable(gl.CULL_FACE)
+	gl.Enable(gl.CULL_FACE)
 	gl.Disable(gl.BLEND)
 	gl.Enable(gl.DEPTH_TEST)
 
@@ -259,60 +264,57 @@ func (v *View) BuildBuffers(proj, view *mat4.T) {
 	v.mvpMatrix = *proj
 	v.mvpMatrix.MultMatrix(&modelViewMatrix)
 
-	m := modelViewMatrix.Array()
-	forward := vec3.T{m[2], m[6], -m[10]}
+	//m := modelViewMatrix.Array()
+	//forward := vec3.T{m[2], m[6], -m[10]}
 
 	var visibleBuffers []*faceBuffer
 	for _, b := range v.buffers {
 		b.reset()
-		if !cullBackface || vec3.Dot(&b.normal, &forward) > 0 {
-			visibleBuffers = append(visibleBuffers, b)
-		}
+		//if !cullBackface || vec3.Dot(&b.normal, &forward) < 0 {
+		visibleBuffers = append(visibleBuffers, b)
+		//}
 	}
-
-	for z := 0; z < SizeZ; z++ {
-		for y := 0; y < SizeY; y++ {
-			for x := 0; x < SizeX; x++ {
-				c := v.Get(x, y, z)
-				if c == 0 {
-					continue
-				}
-
-				for _, b := range visibleBuffers {
-					if v.isFaceExposed(x, y, z, b.normal) {
-						b.append(byte(x), byte(y), byte(z), c)
+	/*
+		for z := 0; z < SizeZ; z++ {
+			for y := 0; y < SizeY; y++ {
+				for x := 0; x < SizeX; x++ {
+					c := v.Get(x, y, z)
+					if c == 0 {
+						continue
+					for _, b := range visibleBuffers {
+						if v.isFaceExposed(x, y, z, b.normal) {
+							b.append(byte(x), byte(y), byte(z), c)
+						}
 					}
 				}
 			}
 		}
-	}
+	*/
 
-	/*
-		var wg sync.WaitGroup
-		wg.Add(len(visibleBuffers))
+	var wg sync.WaitGroup
+	wg.Add(len(visibleBuffers))
 
-		for _, b := range visibleBuffers {
-			go func(b *faceBuffer) {
-				for z := 0; z < SizeZ; z++ {
-					for y := 0; y < SizeY; y++ {
-						for x := 0; x < SizeX; x++ {
-							c := v.Get(x, y, z)
-							if c == 0 {
-								continue
-							}
+	for _, b := range visibleBuffers {
+		go func(b *faceBuffer) {
+			for z := 0; z < SizeZ; z++ {
+				for y := 0; y < SizeY; y++ {
+					for x := 0; x < SizeX; x++ {
+						c := v.Get(x, y, z)
+						if c == 0 {
+							continue
+						}
 
-							if v.isFaceExposed(x, y, z, b.normal) {
-								b.append(byte(x), byte(y), byte(z), c)
-							}
+						if v.isFaceExposed(x, y, z, b.normal) {
+							b.append(byte(x), byte(y), byte(z), c)
 						}
 					}
 				}
-				wg.Done()
-			}(b)
-		}
+			}
+			wg.Done()
+		}(b)
+	}
 
-		wg.Wait()
-	*/
+	wg.Wait()
 }
 
 func (v *View) isFaceExposed(x, y, z int, n vec3.T) bool {
