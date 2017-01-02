@@ -8,16 +8,16 @@ package player
 import (
 	"log"
 
+	"github.com/andreas-jonsson/voxbox/data"
 	"github.com/andreas-jonsson/voxbox/room"
 	"github.com/andreas-jonsson/voxbox/voxel"
 	"github.com/andreas-jonsson/voxbox/voxel/vox"
-	"github.com/andreas-jonsson/warp/data"
 )
 
 type Player struct {
 	image voxel.Paletted
 	view  voxel.Image
-	room  *room.Room
+	room  room.Interface
 	alive bool
 }
 
@@ -41,7 +41,7 @@ func NewPlayer(view voxel.Image) *Player {
 	return p
 }
 
-func (p *Player) SetRoom(r *room.Room) {
+func (p *Player) SetRoom(r room.Interface) {
 	p.room = r
 }
 
@@ -59,8 +59,8 @@ func (p *Player) Die() {
 		p.alive = false
 
 		// 	Do not wait for result.
-		p.room.Send(func() {
-			p.blit(p.room)
+		p.room.Send(func(r *room.Room) {
+			p.blit(r)
 		})
 	}
 }

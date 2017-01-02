@@ -11,6 +11,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/andreas-jonsson/voxbox/data"
 	"github.com/andreas-jonsson/voxbox/game"
 	"github.com/andreas-jonsson/voxbox/game/player"
 	"github.com/andreas-jonsson/voxbox/platform"
@@ -18,13 +19,12 @@ import (
 	"github.com/andreas-jonsson/voxbox/view"
 	"github.com/andreas-jonsson/voxbox/voxel"
 	"github.com/andreas-jonsson/voxbox/voxel/vox"
-	"github.com/andreas-jonsson/warp/data"
 	"github.com/goxjs/gl"
 	"github.com/ungerik/go3d/mat4"
 )
 
 type playState struct {
-	room   *room.Room
+	room   room.Interface
 	view   *view.View
 	player *player.Player
 }
@@ -60,8 +60,8 @@ func loadRoom(r *room.Room, flags room.Flag) {
 }
 
 func (s *playState) Enter(from game.GameState, args ...interface{}) error {
-	s.room = room.NewRoom(voxel.Pt(256, 64, 256), 16*time.Millisecond)
-	loadRoom(s.room, room.Flag(room.Attached))
+	r := room.NewRoom(voxel.Pt(256, 64, 256), 16*time.Millisecond)
+	loadRoom(r, room.Flag(room.Attached))
 
 	fp, err := data.FS.Open("test.vox")
 	if err != nil {
@@ -82,10 +82,10 @@ func (s *playState) Enter(from game.GameState, args ...interface{}) error {
 	v.SetPalettes(img.Palette)
 	s.view = v
 
-	s.room.Start()
+	s.room = r.Start()
 
 	s.player = player.NewPlayer(s.view)
-	s.player.SetRoom(s.room)
+	s.player.SetRoom(r)
 
 	return nil
 }
@@ -109,8 +109,8 @@ func (s *playState) Update(gctl game.GameControl) error {
 				s.player.Die()
 			case platform.KeyLeft:
 				s.room.Clear()
-				s.room.Send(func() {
-					loadRoom(s.room, room.Flag(room.Falling))
+				s.room.Send(func(r *room.Room) {
+					loadRoom(r, room.Flag(room.Falling))
 				})
 			}
 		}
@@ -157,7 +157,7 @@ func (s *playState) Update(gctl game.GameControl) error {
 	viewMatrix.AssignEulerRotation(rot, math.Pi*0.25, 0)
 	/********/
 
-	viewMatrix.AssignEulerRotation(0, math.Pi*0.35, 0)
+	viewMatrix.AssignEulerRotation(0, math.Pi*0.1, 0)
 	//viewMatrix.TranslateY(80)
 	viewMatrix.TranslateZ(-160)
 

@@ -11,9 +11,9 @@ import (
 	"log"
 
 	"github.com/andreas-jonsson/voxbox/platform"
-	"github.com/andreas-jonsson/warp/game"
-	"github.com/andreas-jonsson/warp/game/menu"
-	"github.com/andreas-jonsson/warp/game/play"
+	"github.com/andreas-jonsson/voxbox/game"
+	"github.com/andreas-jonsson/voxbox/game/menu"
+	"github.com/andreas-jonsson/voxbox/game/play"
 
 	"golang.org/x/mobile/app"
 	"golang.org/x/mobile/event/key"

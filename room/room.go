@@ -11,10 +11,9 @@ import (
 	"io"
 	"time"
 
-	"github.com/andreas-jonsson/voxbox/view"
+	"github.com/andreas-jonsson/voxbox/data"
 	"github.com/andreas-jonsson/voxbox/voxel"
 	"github.com/andreas-jonsson/voxbox/voxel/vox"
-	"github.com/andreas-jonsson/warp/data"
 )
 
 type Flag uint8
@@ -96,6 +95,14 @@ type Room struct {
 	stopChan chan struct{}
 }
 
+type Interface interface {
+	Send(f func(*Room)) <-chan struct{}
+	Clear()
+	Bounds() voxel.Box
+	BlitToView(dst voxel.ImageData, dp voxel.Point, sr voxel.Box) <-chan struct{}
+	Destroy()
+}
+
 func NewRoom(size voxel.Point, simSpeed time.Duration) *Room {
 	return &Room{
 		stopChan:   make(chan struct{}),
@@ -108,10 +115,10 @@ func NewRoom(size voxel.Point, simSpeed time.Duration) *Room {
 	}
 }
 
-func (r *Room) Send(f func()) <-chan struct{} {
+func (r *Room) Send(f func(*Room)) <-chan struct{} {
 	cbChan := make(chan struct{}, 1)
 	r.funcChan <- func() {
-		f()
+		f(r)
 		cbChan <- struct{}{}
 	}
 	return cbChan
@@ -125,15 +132,15 @@ func (r *Room) Destroy() {
 }
 
 func (r *Room) Clear() {
-	r.Send(func() {
+	r.Send(func(r *Room) {
 		for i := range r.data {
 			r.data[i] = 0
 		}
 	})
 }
 
-func (r *Room) Start() {
-	go func() {
+func (r *Room) Start() Interface {
+	go func(r *Room) {
 		for {
 			select {
 			case <-r.markTicker.C:
@@ -146,7 +153,9 @@ func (r *Room) Start() {
 				break
 			}
 		}
-	}()
+	}(r)
+
+	return r
 }
 
 func (r *Room) markPhase() {
@@ -246,8 +255,8 @@ func (r *Room) stepPhase() {
 	}
 }
 
-func (r *Room) BlitToView(dst *view.View, dp voxel.Point, sr voxel.Box) <-chan struct{} {
-	return r.Send(func() {
+func (r *Room) BlitToView(dst voxel.ImageData, dp voxel.Point, sr voxel.Box) <-chan struct{} {
+	return r.Send(func(r *Room) {
 		sr = sr.Intersect(r.Bounds())
 		dr := voxel.Box{Min: dp, Max: sr.Size().Add(dp)}
 		b := dst.Bounds().Intersect(dr)

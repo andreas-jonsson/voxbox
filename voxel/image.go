@@ -13,6 +13,11 @@ type Image interface {
 	Get(x, y, z int) uint8
 }
 
+type ImageData interface {
+	Image
+	Data() []uint8
+}
+
 func Blit(dst, src Image, dp Point, sr Box) {
 	sr = sr.Intersect(src.Bounds())
 	dr := Box{dp, sr.Size().Add(dp)}

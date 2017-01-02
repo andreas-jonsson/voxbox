@@ -6,6 +6,7 @@
 package view
 
 import (
+	"fmt"
 	"image/color"
 	"sync"
 
@@ -23,8 +24,9 @@ const (
 )
 
 const (
-	cullBackface = false
-	nBuffers     = 1
+	threadedBufferBuilds = false
+	cullBackface         = true
+	nBuffers             = 1
 )
 
 var (
@@ -214,7 +216,7 @@ func (v *View) Data() []uint8 {
 }
 
 func (v *View) SetGLState() {
-	gl.Enable(gl.CULL_FACE)
+	gl.Disable(gl.CULL_FACE)
 	gl.Disable(gl.BLEND)
 	gl.Enable(gl.DEPTH_TEST)
 
@@ -264,23 +266,55 @@ func (v *View) BuildBuffers(proj, view *mat4.T) {
 	v.mvpMatrix = *proj
 	v.mvpMatrix.MultMatrix(&modelViewMatrix)
 
-	//m := modelViewMatrix.Array()
-	//forward := vec3.T{m[2], m[6], -m[10]}
+	m := modelViewMatrix.Array()
+	forward := vec3.T{m[2], m[6], -m[10]}
 
 	var visibleBuffers []*faceBuffer
 	for _, b := range v.buffers {
+		fmt.Println(b.normal, forward, vec3.Dot(&b.normal, &forward))
 		b.reset()
-		//if !cullBackface || vec3.Dot(&b.normal, &forward) < 0 {
-		visibleBuffers = append(visibleBuffers, b)
-		//}
+		d := vec3.Dot(&b.normal, &forward)
+		if !cullBackface || d < 0.5 {
+			visibleBuffers = append(visibleBuffers, b)
+		}
 	}
-	/*
+
+	fmt.Println("#####", len(visibleBuffers))
+
+	if threadedBufferBuilds {
+		var wg sync.WaitGroup
+		wg.Add(len(visibleBuffers))
+
+		for _, b := range visibleBuffers {
+			go func(b *faceBuffer) {
+				for z := 0; z < SizeZ; z++ {
+					for y := 0; y < SizeY; y++ {
+						for x := 0; x < SizeX; x++ {
+							c := v.Get(x, y, z)
+							if c == 0 {
+								continue
+							}
+
+							if v.isFaceExposed(x, y, z, b.normal) {
+								b.append(byte(x), byte(y), byte(z), c)
+							}
+						}
+					}
+				}
+				wg.Done()
+			}(b)
+		}
+
+		wg.Wait()
+	} else {
 		for z := 0; z < SizeZ; z++ {
 			for y := 0; y < SizeY; y++ {
 				for x := 0; x < SizeX; x++ {
 					c := v.Get(x, y, z)
 					if c == 0 {
 						continue
+					}
+
 					for _, b := range visibleBuffers {
 						if v.isFaceExposed(x, y, z, b.normal) {
 							b.append(byte(x), byte(y), byte(z), c)
@@ -289,32 +323,7 @@ func (v *View) BuildBuffers(proj, view *mat4.T) {
 				}
 			}
 		}
-	*/
-
-	var wg sync.WaitGroup
-	wg.Add(len(visibleBuffers))
-
-	for _, b := range visibleBuffers {
-		go func(b *faceBuffer) {
-			for z := 0; z < SizeZ; z++ {
-				for y := 0; y < SizeY; y++ {
-					for x := 0; x < SizeX; x++ {
-						c := v.Get(x, y, z)
-						if c == 0 {
-							continue
-						}
-
-						if v.isFaceExposed(x, y, z, b.normal) {
-							b.append(byte(x), byte(y), byte(z), c)
-						}
-					}
-				}
-			}
-			wg.Done()
-		}(b)
 	}
-
-	wg.Wait()
 }
 
 func (v *View) isFaceExposed(x, y, z int, n vec3.T) bool {
