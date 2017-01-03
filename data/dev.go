@@ -1,7 +1,7 @@
 // +build dev
 
 // +----------------=V=o=x=B=o=x=-=E=n=g=i=n=e=-----------------+
-// | Copyright (C) 2016 Andreas T Jonsson. All rights reserved. |
+// | Copyright (C) 2016-2017 Andreas T Jonsson. All rights reserved. |
 // | Contact <mail@andreasjonsson.se>                           |
 // +------------------------------------------------------------+
 
