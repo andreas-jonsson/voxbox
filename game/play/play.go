@@ -157,9 +157,9 @@ func (s *playState) Update(gctl game.GameControl) error {
 	viewMatrix.AssignEulerRotation(rot, math.Pi*0.25, 0)
 	/********/
 
-	viewMatrix.AssignEulerRotation(0, math.Pi*0.1, 0)
+	viewMatrix.AssignEulerRotation(0, math.Pi*0.3, 0)
 	//viewMatrix.TranslateY(80)
-	viewMatrix.TranslateZ(-160)
+	viewMatrix.TranslateZ(-140)
 
 	projMatrix.AssignPerspectiveProjection(l, r, b, t, near, far)
 	s.view.BuildBuffers(&projMatrix, &viewMatrix)

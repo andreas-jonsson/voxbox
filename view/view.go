@@ -6,11 +6,12 @@
 package view
 
 import (
-	"fmt"
 	"image/color"
+	"math"
 	"sync"
 
 	"github.com/andreas-jonsson/voxbox/voxel"
+	"github.com/barnex/fmath"
 	"github.com/goxjs/gl"
 	"github.com/goxjs/gl/glutil"
 	"github.com/ungerik/go3d/mat4"
@@ -26,6 +27,7 @@ const (
 const (
 	threadedBufferBuilds = false
 	cullBackface         = true
+	cullAngel            = 60
 	nBuffers             = 1
 )
 
@@ -267,19 +269,19 @@ func (v *View) BuildBuffers(proj, view *mat4.T) {
 	v.mvpMatrix.MultMatrix(&modelViewMatrix)
 
 	m := modelViewMatrix.Array()
-	forward := vec3.T{m[2], m[6], -m[10]}
+	forward := vec3.T{-m[2], -m[6], -m[10]}
 
 	var visibleBuffers []*faceBuffer
 	for _, b := range v.buffers {
-		fmt.Println(b.normal, forward, vec3.Dot(&b.normal, &forward))
 		b.reset()
-		d := vec3.Dot(&b.normal, &forward)
-		if !cullBackface || d < 0.5 {
+
+		angel := fmath.Acos(vec3.Dot(&b.normal, &forward)) / math.Pi * 180
+		if !cullBackface || angel > cullAngel {
 			visibleBuffers = append(visibleBuffers, b)
 		}
 	}
 
-	fmt.Println("#####", len(visibleBuffers))
+	//log.Println("Number of visible faces:", len(visibleBuffers))
 
 	if threadedBufferBuilds {
 		var wg sync.WaitGroup
