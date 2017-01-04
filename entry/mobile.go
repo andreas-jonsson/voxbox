@@ -1,19 +1,19 @@
 // +build mobile
 
-// +----------------=V=o=x=B=o=x=-=E=n=g=i=n=e=-----------------+
+// +------------------=V=o=x=B=o=x=-=E=n=g=i=n=e=--------------------+
 // | Copyright (C) 2016-2017 Andreas T Jonsson. All rights reserved. |
-// | Contact <mail@andreasjonsson.se>                           |
-// +------------------------------------------------------------+
+// | Contact <mail@andreasjonsson.se>                                |
+// +-----------------------------------------------------------------+
 
 package entry
 
 import (
 	"log"
 
-	"github.com/andreas-jonsson/voxbox/platform"
 	"github.com/andreas-jonsson/voxbox/game"
 	"github.com/andreas-jonsson/voxbox/game/menu"
 	"github.com/andreas-jonsson/voxbox/game/play"
+	"github.com/andreas-jonsson/voxbox/platform"
 
 	"golang.org/x/mobile/app"
 	"golang.org/x/mobile/event/key"
