@@ -6,6 +6,7 @@
 package play
 
 import (
+	"fmt"
 	"image/color/palette"
 	"log"
 	"math"
@@ -52,18 +53,28 @@ func loadRoom(r *room.Room, flags room.Flag) {
 		voxel.Pt(194, 0, 194),
 	}
 
-	for _, pos := range voxPos {
-		if err := r.LoadVOXFile("test.vox", pos, flags); err != nil {
+	for i, pos := range voxPos {
+		if err := r.LoadVOXFile(fmt.Sprintf("test%d.vox", i%3), pos, flags); err != nil {
 			log.Panicln(err)
 		}
 	}
+	/*
+		bounds := r.Bounds()
+		for z := 0; z < bounds.Max.Z; z++ {
+			for y := 0; y < bounds.Max.Y; y++ {
+				for x := 0; x < bounds.Max.X; x++ {
+					r.Set(x, y, z, 1)
+				}
+			}
+		}
+	*/
 }
 
 func (s *playState) Enter(from game.GameState, args ...interface{}) error {
 	r := room.NewRoom(voxel.Pt(256, 64, 256), 16*time.Millisecond)
 	loadRoom(r, room.Flag(room.Attached))
 
-	fp, err := data.FS.Open("test.vox")
+	fp, err := data.FS.Open("test0.vox")
 	if err != nil {
 		return err
 	}
@@ -137,8 +148,8 @@ func (s *playState) Update(gctl game.GameControl) error {
 	const (
 		near        = 0.1
 		far         = 10000
-		angleOfView = 90
-		aspectRatio = 16 / 9
+		angleOfView = 45
+		aspectRatio = 16 / 10
 	)
 
 	scale := float32(math.Tan(angleOfView*0.5*math.Pi/180) * near)
@@ -157,9 +168,9 @@ func (s *playState) Update(gctl game.GameControl) error {
 	viewMatrix.AssignEulerRotation(rot, math.Pi*0.25, 0)
 	/********/
 
-	viewMatrix.AssignEulerRotation(0, math.Pi*0.3, 0)
-	//viewMatrix.TranslateY(80)
-	viewMatrix.TranslateZ(-140)
+	viewMatrix.AssignEulerRotation(0, math.Pi*0.33, 0)
+	viewMatrix.TranslateY(-20)
+	viewMatrix.TranslateZ(-260)
 
 	projMatrix.AssignPerspectiveProjection(l, r, b, t, near, far)
 	s.view.BuildBuffers(&projMatrix, &viewMatrix)

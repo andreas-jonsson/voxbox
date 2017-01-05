@@ -19,9 +19,9 @@ import (
 )
 
 const (
-	SizeX = 160
-	SizeY = 80
-	SizeZ = 160
+	SizeX = 128
+	SizeY = 64
+	SizeZ = 128
 )
 
 const (
