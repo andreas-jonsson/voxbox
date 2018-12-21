@@ -10,7 +10,7 @@ import (
 	"math"
 	"sync"
 
-	"github.com/andreas-jonsson/voxbox/voxel"
+	"github.com/andreas-jonsson/voxel/voxel"
 	"github.com/barnex/fmath"
 	"github.com/goxjs/gl"
 	"github.com/goxjs/gl/glutil"

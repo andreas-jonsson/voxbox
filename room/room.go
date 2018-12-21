@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/andreas-jonsson/voxbox/data"
-	"github.com/andreas-jonsson/voxbox/voxel"
-	"github.com/andreas-jonsson/voxbox/voxel/vox"
+	"github.com/andreas-jonsson/voxel/voxel"
+	"github.com/andreas-jonsson/voxel/voxel/vox"
 )
 
 type Flag uint8

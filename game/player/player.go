@@ -10,8 +10,8 @@ import (
 
 	"github.com/andreas-jonsson/voxbox/data"
 	"github.com/andreas-jonsson/voxbox/room"
-	"github.com/andreas-jonsson/voxbox/voxel"
-	"github.com/andreas-jonsson/voxbox/voxel/vox"
+	"github.com/andreas-jonsson/voxel/voxel"
+	"github.com/andreas-jonsson/voxel/voxel/vox"
 )
 
 type Player struct {

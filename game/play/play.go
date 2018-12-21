@@ -18,8 +18,8 @@ import (
 	"github.com/andreas-jonsson/voxbox/platform"
 	"github.com/andreas-jonsson/voxbox/room"
 	"github.com/andreas-jonsson/voxbox/view"
-	"github.com/andreas-jonsson/voxbox/voxel"
-	"github.com/andreas-jonsson/voxbox/voxel/vox"
+	"github.com/andreas-jonsson/voxel/voxel"
+	"github.com/andreas-jonsson/voxel/voxel/vox"
 	"github.com/goxjs/gl"
 	"github.com/ungerik/go3d/mat4"
 )
